@@ -1,0 +1,50 @@
+{
+  "name": "@caseforge/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push",
+    "db:seed": "node --experimental-strip-types prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "postinstall": "prisma generate",
+    "test:smoke": "node test/smoke.mjs",
+    "seed:cases": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/seed-cases.js",
+    "refresh-profile": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/refresh-profile.js"
+  },
+  "dependencies": {
+    "@caseforge/shared": "workspace:*",
+    "@fastify/cookie": "^11.0.2",
+    "@nestjs/common": "^11.0.1",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.1",
+    "@nestjs/jwt": "^11.0.0",
+    "@nestjs/platform-fastify": "^11.0.1",
+    "@nestjs/platform-socket.io": "^11.0.1",
+    "@nestjs/schedule": "^5.0.1",
+    "@nestjs/websockets": "^11.0.1",
+    "@prisma/client": "^6.2.1",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "@types/jsonwebtoken": "^9.0.7",
+    "bullmq": "^5.34.10",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1",
+    "ioredis": "^5.4.2",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "socket.io": "^4.8.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/schematics": "^11.0.0",
+    "@types/node": "^22.10.5",
+    "prisma": "^6.2.1",
+    "typescript": "^5.7.3"
+  }
+}

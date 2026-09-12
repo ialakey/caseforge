@@ -1,0 +1,480 @@
+// Every monetary amount is an integer in minor units. Never a Float.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ANALYST
+  SUPPORT
+  ADMIN
+}
+
+enum ItemRarity {
+  CONSUMER
+  INDUSTRIAL
+  MILSPEC
+  RESTRICTED
+  CLASSIFIED
+  COVERT
+  EXTRAORDINARY
+}
+
+enum InventoryItemStatus {
+  AVAILABLE // sitting in the site inventory
+  LOCKED // reserved for a withdrawal, must not change
+  WITHDRAWN // handed to the player in Steam
+  SOLD // sold back to the site for balance
+  UPGRADED // staked in an upgrade and consumed regardless of the outcome
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL_REFUND
+  CASE_OPEN
+  ITEM_SELL
+  ADMIN_ADJUSTMENT
+  BONUS
+}
+
+enum UpgradeStatus {
+  WON
+  LOST
+}
+
+enum WithdrawalStatus {
+  PENDING // accepted, waiting for a bot
+  PROCESSING // a bot is sending the offer
+  SENT // offer sent, waiting for the player
+  COMPLETED // the player accepted
+  FAILED // failed, items returned
+  CANCELLED // cancelled by the player or an operator
+}
+
+enum BotStatus {
+  OFFLINE
+  ONLINE
+  BUSY
+  DISABLED
+  ERROR
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  steamId64 String   @unique
+  username  String
+  avatarUrl String?
+  tradeUrl  String?
+  role      UserRole @default(USER)
+
+  /// Denormalised cache; the source of truth is the sum of Transaction.amount.
+  /// A nightly cron checks that they agree.
+  balance Int @default(0)
+
+  isBanned  Boolean @default(false)
+  banReason String?
+
+  /// Groundwork for KYC and geo — filled in at stage 4, but the columns exist
+  /// now so the live users table does not need migrating later.
+  isVerified  Boolean @default(false)
+  countryCode String? @db.Char(2)
+
+  registrationIp String?
+  lastLoginIp    String?
+  lastLoginAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  serverSeeds  ServerSeed[]
+  clientSeeds  ClientSeed[]
+  openings     CaseOpening[]
+  inventory    InventoryItem[]
+  transactions Transaction[]
+  withdrawals  Withdrawal[]
+  upgrades     Upgrade[]
+  auditLogs    AuditLog[]      @relation("AuditActor")
+
+  @@index([createdAt])
+  @@index([role])
+  @@map("users")
+}
+
+model Item {
+  id String @id @default(uuid()) @db.Uuid
+
+  /// Steam key: the exact market name. Unique, and the join key for price sync.
+  marketHashName String     @unique
+  name           String
+  imageUrl       String?
+  rarity         ItemRarity
+  weaponType     String?
+  exterior       String?
+
+  /// The effective price resolves as priceOverride ?? marketPrice.
+  marketPrice    Int       @default(0)
+  priceOverride  Int?
+  priceUpdatedAt DateTime?
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  caseItems       CaseItem[]
+  inventoryItems  InventoryItem[]
+  openings        CaseOpening[]
+  botItems        BotInventoryItem[]
+  upgradeTargets  Upgrade[]          @relation("UpgradeTarget")
+
+  @@index([rarity])
+  @@index([isActive])
+  @@map("items")
+}
+
+model Case {
+  id     String @id @default(uuid()) @db.Uuid
+  slug   String @unique
+
+  /// Display name in the base locale (Russian).
+  name String
+
+  /// English display name. Nullable on purpose: a case created before the
+  /// English catalogue existed simply falls back to `name`, which reads worse
+  /// than a translation but far better than an empty title.
+  nameEn String?
+
+  price     Int
+  imageUrl  String?
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  /// RTP cached at the last recalculation, so listing pages need not recompute it.
+  rtpCached       Float?
+  rtpCalculatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items    CaseItem[]
+  openings CaseOpening[]
+
+  @@index([isActive, sortOrder])
+  @@map("cases")
+}
+
+model CaseItem {
+  id     String @id @default(uuid()) @db.Uuid
+  caseId String @db.Uuid
+  itemId String @db.Uuid
+
+  /// Ticket range within [0, 999999], bounds inclusive.
+  /// The ranges of all items in a case must cover the space with no gaps and
+  /// no overlaps — validateTicketRanges enforces this on save.
+  rangeFrom Int
+  rangeTo   Int
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([caseId, itemId])
+  @@index([caseId, rangeFrom])
+  @@map("case_items")
+}
+
+model ServerSeed {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+
+  /// The seed is always stored — the server needs it to compute the roll.
+  /// It is only exposed after rotation (isActive = NULL, revealedAt set);
+  /// while the seed is active the API returns nothing but seedHash.
+  seed     String
+  seedHash String
+
+  nonce Int @default(0)
+
+  /// true = active, NULL = retired. Nullable on purpose: in Postgres NULLs do
+  /// not collide in a unique index, so the (userId, isActive) pair yields
+  /// exactly one active seed per user without capping the retired ones.
+  isActive Boolean?
+
+  createdAt  DateTime  @default(now())
+  revealedAt DateTime?
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  openings CaseOpening[]
+  upgrades Upgrade[]
+
+  @@unique([userId, isActive], map: "server_seeds_one_active_per_user")
+  @@index([userId])
+  @@map("server_seeds")
+}
+
+model ClientSeed {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  seed   String
+
+  /// See the note on ServerSeed.isActive.
+  isActive Boolean?
+
+  createdAt DateTime @default(now())
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  openings CaseOpening[]
+  upgrades Upgrade[]
+
+  @@unique([userId, isActive], map: "client_seeds_one_active_per_user")
+  @@index([userId])
+  @@map("client_seeds")
+}
+
+model CaseOpening {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  caseId String @db.Uuid
+  itemId String @db.Uuid
+
+  serverSeedId String @db.Uuid
+  clientSeedId String @db.Uuid
+  nonce        Int
+  roll         Int
+
+  /// Prices at the moment of opening, so reports do not shift when items are re-priced.
+  casePrice Int
+  itemPrice Int
+
+  createdAt DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  case       Case       @relation(fields: [caseId], references: [id], onDelete: Restrict)
+  item       Item       @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  serverSeed ServerSeed @relation(fields: [serverSeedId], references: [id], onDelete: Restrict)
+  clientSeed ClientSeed @relation(fields: [clientSeedId], references: [id], onDelete: Restrict)
+
+  inventoryItem InventoryItem?
+
+  /// Guards against a double opening on retry: the (seed, nonce) pair is unique.
+  @@unique([serverSeedId, nonce])
+  @@index([userId, createdAt])
+  @@index([caseId, createdAt])
+  @@index([createdAt])
+  @@map("case_openings")
+}
+
+model InventoryItem {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  itemId String @db.Uuid
+
+  status InventoryItemStatus @default(AVAILABLE)
+
+  /// Price at the time of acquisition — the sell-back value is computed from it.
+  acquiredPrice Int
+
+  openingId    String? @unique @db.Uuid
+  withdrawalId String? @db.Uuid
+
+  /// The upgrade this item was staked in (for a consumed stake) or won from
+  /// (for a reward).
+  upgradeStakeId  String? @unique @db.Uuid
+  upgradeRewardId String? @unique @db.Uuid
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  soldAt    DateTime?
+
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item       Item         @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  opening    CaseOpening? @relation(fields: [openingId], references: [id], onDelete: SetNull)
+  withdrawal Withdrawal?  @relation(fields: [withdrawalId], references: [id], onDelete: SetNull)
+
+  upgradeStake  Upgrade? @relation("UpgradeStake", fields: [upgradeStakeId], references: [id], onDelete: SetNull)
+  upgradeReward Upgrade? @relation("UpgradeReward", fields: [upgradeRewardId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([withdrawalId])
+  @@map("inventory_items")
+}
+
+/// Upgrade: the player stakes an item against a pricier one.
+model Upgrade {
+  id     String        @id @default(uuid()) @db.Uuid
+  userId String        @db.Uuid
+  status UpgradeStatus
+
+  /// The target item — the one the player was trying to win.
+  targetItemId String @db.Uuid
+
+  /// Prices at the moment of the upgrade: the chance was computed from them
+  /// and they must not drift when items are re-priced.
+  stakeValue  Int
+  targetValue Int
+
+  /// Win chance and the ticket threshold — together with the roll they make
+  /// the outcome fully verifiable.
+  chance       Float
+  winThreshold Int
+  roll         Int
+
+  serverSeedId String @db.Uuid
+  clientSeedId String @db.Uuid
+  nonce        Int
+
+  createdAt DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetItem Item       @relation("UpgradeTarget", fields: [targetItemId], references: [id], onDelete: Restrict)
+  serverSeed ServerSeed @relation(fields: [serverSeedId], references: [id], onDelete: Restrict)
+  clientSeed ClientSeed @relation(fields: [clientSeedId], references: [id], onDelete: Restrict)
+
+  stake  InventoryItem? @relation("UpgradeStake")
+  reward InventoryItem? @relation("UpgradeReward")
+
+  /// The same replay protection a case opening has.
+  @@unique([serverSeedId, nonce])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("upgrades")
+}
+
+model Transaction {
+  id     String          @id @default(uuid()) @db.Uuid
+  userId String          @db.Uuid
+  type   TransactionType
+
+  /// Signed amount: debits are negative, credits positive.
+  amount Int
+
+  /// Balance after the entry — a snapshot for audit and reconciliation.
+  balanceAfter Int
+
+  /// Reference to the originating entity (openingId, withdrawalId, PSP payment).
+  referenceId String?
+  comment     String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+model Withdrawal {
+  id     String           @id @default(uuid()) @db.Uuid
+  userId String           @db.Uuid
+  status WithdrawalStatus @default(PENDING)
+
+  totalValue Int
+  tradeUrl   String
+
+  botId        String? @db.Uuid
+  tradeOfferId String?
+
+  failureReason String?
+  attempts      Int     @default(0)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  sentAt      DateTime?
+  completedAt DateTime?
+
+  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bot   SteamBot?       @relation(fields: [botId], references: [id], onDelete: SetNull)
+  items InventoryItem[]
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@map("withdrawals")
+}
+
+model SteamBot {
+  id        String    @id @default(uuid()) @db.Uuid
+  steamId64 String    @unique
+  username  String
+  label     String?
+  status    BotStatus @default(OFFLINE)
+
+  /// Secrets are stored encrypted (AES-256-GCM under BOT_SECRETS_KEY) and are
+  /// decrypted only inside the bot worker.
+  encryptedPassword       String
+  encryptedSharedSecret   String
+  encryptedIdentitySecret String
+
+  /// A Steam inventory holds 1000 slots; keep headroom for incoming deposits.
+  maxItems     Int @default(900)
+  currentItems Int @default(0)
+
+  lastOnlineAt DateTime?
+  lastError    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  withdrawals Withdrawal[]
+  inventory   BotInventoryItem[]
+
+  @@index([status])
+  @@map("steam_bots")
+}
+
+model BotInventoryItem {
+  id     String @id @default(uuid()) @db.Uuid
+  botId  String @db.Uuid
+  itemId String @db.Uuid
+
+  /// assetId is unique within Steam and changes every time an item moves.
+  assetId    String
+  isReserved Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  bot  SteamBot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  item Item     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([botId, assetId])
+  @@index([itemId, isReserved])
+  @@map("bot_inventory_items")
+}
+
+model AuditLog {
+  id      String @id @default(uuid()) @db.Uuid
+  actorId String @db.Uuid
+
+  action     String
+  entityType String
+  entityId   String?
+
+  /// Before/after snapshots — an incident cannot be investigated without them.
+  before Json?
+  after  Json?
+
+  ip String?
+
+  createdAt DateTime @default(now())
+
+  actor User @relation("AuditActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}

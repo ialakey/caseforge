@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# pnpm 11 requires postinstall scripts of dependencies to be allowed explicitly
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  msgpackr-extract: true
+  prisma: true
+  protobufjs: true

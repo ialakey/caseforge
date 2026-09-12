@@ -1,0 +1,28 @@
+{
+  "name": "@caseforge/bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --experimental-strip-types src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "add-bot": "node --experimental-strip-types scripts/add-bot.ts"
+  },
+  "dependencies": {
+    "@caseforge/shared": "workspace:*",
+    "@prisma/client": "^6.2.1",
+    "bullmq": "^5.34.10",
+    "dotenv": "^16.4.7",
+    "ioredis": "^5.4.2",
+    "steam-totp": "^2.1.2",
+    "steam-tradeoffer-manager": "^2.11.1",
+    "steam-user": "^5.2.1",
+    "steamcommunity": "^3.48.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3"
+  }
+}

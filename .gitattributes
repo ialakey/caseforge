@@ -1,0 +1,16 @@
+# Normalise line endings: LF in the repository and in the working tree, so a
+# checkout on Windows does not turn every file into a diff on the next commit.
+* text=auto eol=lf
+
+# Generated, and huge: keep it out of diffs and language statistics.
+pnpm-lock.yaml -diff linguist-generated
+
+# Binary assets, never line-ending converted.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary

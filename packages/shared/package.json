@@ -1,0 +1,37 @@
+{
+  "name": "@caseforge/shared",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test src/*.test.ts"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "typescript": "^5.7.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/provably-fair.d.ts",
+      "default": "./dist/provably-fair.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "node": [
+        "./dist/provably-fair.d.ts"
+      ]
+    }
+  }
+}

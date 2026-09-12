@@ -1,0 +1,27 @@
+{
+  "name": "caseforge",
+  "private": true,
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "db:migrate": "pnpm --filter @caseforge/api db:migrate",
+    "db:seed": "pnpm --filter @caseforge/api db:seed",
+    "db:studio": "pnpm --filter @caseforge/api db:studio",
+    "setup": "pnpm install && pnpm infra:up && pnpm --filter @caseforge/shared build && pnpm db:migrate && pnpm db:seed",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
+    "test:smoke": "pnpm --filter @caseforge/api test:smoke",
+    "seed:cases": "pnpm --filter @caseforge/api seed:cases"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "prettier": "^3.4.2"
+  }
+}

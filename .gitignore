@@ -1,0 +1,40 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+build/
+.next/
+dist-scripts/
+*.tsbuildinfo
+.turbo/
+
+# tests
+coverage/
+
+# environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# docker volumes
+pgdata/
+redisdata/
+
+# editors
+.idea/
+.vscode/
+*.swp
+
+# os
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# local scratch notes
+task.txt
