@@ -25,6 +25,23 @@ and the back office computes margin per case before it goes live.
 The stack and the architectural decisions are covered in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+
+<p align="center">
+  <img src="docs/screenshots/catalogue.png" alt="The case catalogue with the live drop feed above it" width="900">
+</p>
+
+<p align="center">
+  <em>The catalogue and the live drop feed. Prices come from the Steam market; the language and currency switches sit in the header.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/case-contents.png" alt="A case's contents with the rarity of each item and its exact drop chance" width="900">
+</p>
+
+<p align="center">
+  <em>Every case publishes its contents: rarity, current price and the exact chance of each item. The odds are the ticket ranges the server rolls against, not a marketing figure.</em>
+</p>
+
 ---
 
 ## Stack
