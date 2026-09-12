@@ -188,6 +188,15 @@ export function Roulette({
                 alt={item.marketHashName}
                 rarity={item.rarity}
                 className={horizontal ? 'h-20 w-full' : 'h-14 w-full'}
+                /**
+                 * The strip is about 8900px long and the winner sits near its
+                 * end, far past the range a lazy image would be preloaded in.
+                 * On a cold cache the tile under the marker would arrive after
+                 * the reel had already stopped on it. Eager costs nothing here:
+                 * the 60 tiles are drawn from the case pool, so they repeat the
+                 * same handful of URLs and the browser fetches each one once.
+                 */
+                loading="eager"
               />
               <div className="w-full truncate px-2 text-center text-[10px] text-neutral-400">
                 {item.marketHashName}

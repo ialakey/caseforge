@@ -8,17 +8,23 @@ import { rarityColor } from './RarityBadge';
  * read an item's value at a glance, and that is how the in-game inventory looks.
  * An item without a picture does not break the layout — the same backdrop stays
  * in place with a placeholder.
+ *
+ * Loading is lazy by default, which suits long lists. Pass `loading="eager"`
+ * where the picture has to be ready before it scrolls into view — the opening
+ * reel is the case for it.
  */
 export function ItemImage({
   src,
   alt,
   rarity,
   className = '',
+  loading = 'lazy',
 }: {
   src: string | null;
   alt: string;
   rarity: ItemRarity;
   className?: string;
+  loading?: 'lazy' | 'eager';
 }) {
   const color = rarityColor(rarity);
 
@@ -33,7 +39,7 @@ export function ItemImage({
         <img
           src={src}
           alt={alt}
-          loading="lazy"
+          loading={loading}
           className="h-full w-full object-contain p-1"
           draggable={false}
         />
