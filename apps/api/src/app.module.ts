@@ -13,6 +13,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { DropsModule } from './drops/drops.module';
 import { WithdrawalsModule } from './withdrawals/withdrawals.module';
 import { UpgradeModule } from './upgrade/upgrade.module';
+import { ContractsModule } from './contracts/contracts.module';
 import { AdminModule } from './admin/admin.module';
 
 @Module({
@@ -29,6 +30,7 @@ import { AdminModule } from './admin/admin.module';
     DropsModule,
     WithdrawalsModule,
     UpgradeModule,
+    ContractsModule,
     AdminModule,
   ],
   providers: [

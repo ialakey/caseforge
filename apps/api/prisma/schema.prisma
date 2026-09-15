@@ -32,6 +32,7 @@ enum InventoryItemStatus {
   WITHDRAWN // handed to the player in Steam
   SOLD // sold back to the site for balance
   UPGRADED // staked in an upgrade and consumed regardless of the outcome
+  CONTRACTED // thrown into a contract and consumed regardless of the outcome
 }
 
 enum TransactionType {
@@ -99,6 +100,7 @@ model User {
   transactions Transaction[]
   withdrawals  Withdrawal[]
   upgrades     Upgrade[]
+  contracts    Contract[]
   auditLogs    AuditLog[]      @relation("AuditActor")
 
   @@index([createdAt])
@@ -132,6 +134,7 @@ model Item {
   openings        CaseOpening[]
   botItems        BotInventoryItem[]
   upgradeTargets  Upgrade[]          @relation("UpgradeTarget")
+  contractRewards Contract[]         @relation("ContractRewardItem")
 
   @@index([rarity])
   @@index([isActive])
@@ -208,9 +211,10 @@ model ServerSeed {
   createdAt  DateTime  @default(now())
   revealedAt DateTime?
 
-  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  openings CaseOpening[]
-  upgrades Upgrade[]
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  openings  CaseOpening[]
+  upgrades  Upgrade[]
+  contracts Contract[]
 
   @@unique([userId, isActive], map: "server_seeds_one_active_per_user")
   @@index([userId])
@@ -227,9 +231,10 @@ model ClientSeed {
 
   createdAt DateTime @default(now())
 
-  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  openings CaseOpening[]
-  upgrades Upgrade[]
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  openings  CaseOpening[]
+  upgrades  Upgrade[]
+  contracts Contract[]
 
   @@unique([userId, isActive], map: "client_seeds_one_active_per_user")
   @@index([userId])
@@ -287,6 +292,12 @@ model InventoryItem {
   upgradeStakeId  String? @unique @db.Uuid
   upgradeRewardId String? @unique @db.Uuid
 
+  /// The contract this item was thrown into, or won from. The stake side is
+  /// deliberately not unique — a contract consumes several items at once,
+  /// which is the one thing that makes it different from an upgrade.
+  contractStakeId  String? @db.Uuid
+  contractRewardId String? @unique @db.Uuid
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   soldAt    DateTime?
@@ -299,8 +310,12 @@ model InventoryItem {
   upgradeStake  Upgrade? @relation("UpgradeStake", fields: [upgradeStakeId], references: [id], onDelete: SetNull)
   upgradeReward Upgrade? @relation("UpgradeReward", fields: [upgradeRewardId], references: [id], onDelete: SetNull)
 
+  contractStake  Contract? @relation("ContractStake", fields: [contractStakeId], references: [id], onDelete: SetNull)
+  contractReward Contract? @relation("ContractReward", fields: [contractRewardId], references: [id], onDelete: SetNull)
+
   @@index([userId, status])
   @@index([withdrawalId])
+  @@index([contractStakeId])
   @@map("inventory_items")
 }
 
@@ -343,6 +358,54 @@ model Upgrade {
   @@index([userId, createdAt])
   @@index([createdAt])
   @@map("upgrades")
+}
+
+/// Contract: the player throws several items in and gets exactly one back.
+model Contract {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+
+  /// How many items went in, and what they were worth in total. Stored rather
+  /// than recomputed from the staked rows: an item may later be deleted or
+  /// re-priced, and the contract must still explain itself.
+  stakeCount Int
+  stakeValue Int
+
+  /// The expected reward the outcome table was solved for — stakeValue times
+  /// the contract RTP. Keeping it makes a drift in the margin visible in a
+  /// report without replaying the solver.
+  targetValue Int
+
+  rewardItemId String @db.Uuid
+  rewardValue  Int
+
+  /// The full outcome table with its ticket ranges, exactly as it was played.
+  /// The pool is derived from a live catalogue, so it cannot be rebuilt later
+  /// from prices that have since moved; without this snapshot the roll would
+  /// be reproducible but meaningless.
+  outcomes Json
+
+  roll Int
+
+  serverSeedId String @db.Uuid
+  clientSeedId String @db.Uuid
+  nonce        Int
+
+  createdAt DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rewardItem Item       @relation("ContractRewardItem", fields: [rewardItemId], references: [id], onDelete: Restrict)
+  serverSeed ServerSeed @relation(fields: [serverSeedId], references: [id], onDelete: Restrict)
+  clientSeed ClientSeed @relation(fields: [clientSeedId], references: [id], onDelete: Restrict)
+
+  stakes InventoryItem[] @relation("ContractStake")
+  reward InventoryItem?  @relation("ContractReward")
+
+  /// The same replay protection an opening and an upgrade have.
+  @@unique([serverSeedId, nonce])
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@map("contracts")
 }
 
 model Transaction {

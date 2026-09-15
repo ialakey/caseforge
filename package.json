@@ -18,6 +18,8 @@
     "setup": "pnpm install && pnpm infra:up && pnpm --filter @caseforge/shared build && pnpm db:migrate && pnpm db:seed",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\"",
     "test:smoke": "pnpm --filter @caseforge/api test:smoke",
+    "test:smoke:contracts": "pnpm --filter @caseforge/api test:smoke:contracts",
+    "test:smoke:inventory": "pnpm --filter @caseforge/api test:smoke:inventory",
     "seed:cases": "pnpm --filter @caseforge/api seed:cases"
   },
   "devDependencies": {
