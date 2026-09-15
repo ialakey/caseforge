@@ -50,7 +50,11 @@ function Segmented<T extends string>({
   ariaLabel: string;
 }) {
   return (
-    <div className="flex overflow-hidden rounded bg-neutral-800" role="group" aria-label={ariaLabel}>
+    <div
+      className="flex overflow-hidden rounded bg-surface-overlay"
+      role="group"
+      aria-label={ariaLabel}
+    >
       {options.map((option) => (
         <button
           key={option}
@@ -58,8 +62,8 @@ function Segmented<T extends string>({
           aria-pressed={option === value}
           className={`px-2 py-1 text-xs font-medium transition ${
             option === value
-              ? 'bg-amber-500 text-neutral-950'
-              : 'text-neutral-400 hover:text-neutral-100'
+              ? 'bg-accent text-surface-base'
+              : 'text-ink-muted hover:text-ink-primary'
           }`}
         >
           {label(option)}

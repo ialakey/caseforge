@@ -87,10 +87,10 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
           <img src={gameCase.imageUrl} alt={title} className="h-16 w-20 object-contain" />
         )}
         <h1 className="text-2xl font-semibold">{title}</h1>
-        <Money value={gameCase.price} className="text-lg text-amber-400" />
+        <Money value={gameCase.price} className="text-lg text-accent" />
       </div>
 
-      <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 md:p-6">
+      <div className="rounded-xl border border-edge-subtle bg-surface-raised/70 p-4 md:p-6">
         {batch ? (
           single ? (
             <Roulette
@@ -117,7 +117,7 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
             </div>
           )
         ) : (
-          <p className="py-16 text-center text-neutral-500">{t('case.openHint')}</p>
+          <p className="py-16 text-center text-ink-faint">{t('case.openHint')}</p>
         )}
 
         {batch && !spinning && (
@@ -136,8 +136,8 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
                 disabled={busy}
                 className={`w-12 rounded py-1.5 text-sm font-medium transition disabled:opacity-40 ${
                   count === preset
-                    ? 'bg-amber-500 text-neutral-950'
-                    : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                    ? 'bg-accent text-surface-base'
+                    : 'bg-surface-overlay text-ink-muted hover:bg-surface-hover'
                 }`}
               >
                 ×{preset}
@@ -149,7 +149,7 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
             <button
               onClick={open}
               disabled={busy || notEnough}
-              className="rounded-lg bg-amber-500 px-10 py-3 font-semibold text-neutral-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+              className="cf-btn-primary px-10 py-3"
             >
               {spinning
                 ? t('case.spinning')
@@ -158,19 +158,16 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
                   : `${t('case.open')} ${count > 1 ? `x${count} ` : ''}${money(totalPrice)}`}
             </button>
           ) : (
-            <a
-              href={loginUrl}
-              className="rounded-lg bg-blue-600 px-10 py-3 font-semibold hover:bg-blue-500"
-            >
+            <a href={loginUrl} className="cf-btn-primary px-10 py-3">
               {t('nav.signIn')}
             </a>
           )}
 
-          {notEnough && <p className="text-sm text-red-400">{t('common.notEnoughFunds')}</p>}
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {notEnough && <p className="text-sm text-negative">{t('common.notEnoughFunds')}</p>}
+          {error && <p className="text-sm text-negative">{error}</p>}
 
           {batch && !spinning && (
-            <p className="text-center text-xs text-neutral-600">
+            <p className="text-center text-xs text-ink-faint">
               {batch.openings.length === 1
                 ? `${t('case.roll')} ${batch.openings[0]!.roll.toLocaleString(locale)} · nonce ${batch.openings[0]!.nonce}`
                 : `nonce ${batch.openings[0]!.nonce}–${batch.openings[batch.openings.length - 1]!.nonce}`}
@@ -182,14 +179,14 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
       </div>
 
       <section>
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">
+        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-ink-faint">
           {t('case.contents')}
         </h2>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           {showcase.map((item) => (
             <div
               key={item.id}
-              className="rounded-lg border-t-2 bg-neutral-900 p-3"
+              className="rounded-lg border-t-2 bg-surface-raised p-3"
               style={{ borderTopColor: rarityColor(item.rarity) }}
             >
               <ItemImage
@@ -203,8 +200,8 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
                 {item.marketHashName}
               </div>
               <div className="mt-1 flex items-center justify-between text-xs">
-                <Money value={item.price} className="text-amber-400" />
-                <span className="text-neutral-500">{(item.chance * 100).toFixed(2)}%</span>
+                <Money value={item.price} className="text-accent" />
+                <span className="text-ink-faint">{(item.chance * 100).toFixed(2)}%</span>
               </div>
             </div>
           ))}

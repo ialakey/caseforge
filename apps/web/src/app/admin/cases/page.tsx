@@ -79,8 +79,8 @@ export default function AdminCasesPage() {
       </div>
 
       <p className="text-sm text-neutral-500">
-        Item prices drift: a case assembled at 90% RTP can go into loss after a knife's price
-        jumps. Synchronisation recomputes the RTP of every active case.
+        Item prices drift: a case assembled at 90% RTP can go into loss after a knife's price jumps.
+        Synchronisation recomputes the RTP of every active case.
       </p>
 
       {error && <p className="text-sm text-red-400">{error}</p>}

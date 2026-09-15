@@ -24,7 +24,7 @@ export function SteamAvatar({
   if (!src || failed) {
     return (
       <span
-        className="flex shrink-0 items-center justify-center rounded-full bg-neutral-700 font-medium text-neutral-300"
+        className="flex shrink-0 items-center justify-center rounded-full bg-surface-hover font-medium text-ink-muted"
         style={{ width: size, height: size, fontSize: size * 0.45 }}
         aria-hidden
       >

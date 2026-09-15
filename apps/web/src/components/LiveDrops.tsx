@@ -29,11 +29,7 @@ export function LiveDrops() {
   }, []);
 
   if (drops.length === 0) {
-    return (
-      <div className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4 text-sm text-neutral-500">
-        {t('home.dropsEmpty')}
-      </div>
-    );
+    return <div className="cf-panel p-4 text-sm text-ink-faint">{t('home.dropsEmpty')}</div>;
   }
 
   return (
@@ -41,7 +37,7 @@ export function LiveDrops() {
       {drops.map((drop) => (
         <div
           key={drop.openingId}
-          className="min-w-[150px] shrink-0 rounded-lg border-t-2 bg-neutral-900 p-2"
+          className="min-w-[150px] shrink-0 rounded-lg border-t-2 bg-surface-raised/80 p-2 transition hover:bg-surface-overlay"
           style={{ borderTopColor: rarityColor(drop.rarity) }}
         >
           <ItemImage
@@ -51,8 +47,8 @@ export function LiveDrops() {
             className="mb-1 h-14 w-full"
           />
           <div className="truncate text-xs font-medium">{drop.itemName}</div>
-          <div className="truncate text-[11px] text-neutral-500">{drop.username}</div>
-          <Money value={drop.price} className="text-xs text-amber-400" />
+          <div className="truncate text-[11px] text-ink-faint">{drop.username}</div>
+          <Money value={drop.price} className="text-xs font-semibold text-accent" />
         </div>
       ))}
     </div>

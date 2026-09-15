@@ -54,13 +54,13 @@ export function DropResults({ openings, spent }: { openings: OpenCaseResult[]; s
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
-        <span className="text-neutral-500">
-          {t('drops.spent')}: <Money value={spent} className="text-neutral-300" />
+        <span className="text-ink-faint">
+          {t('drops.spent')}: <Money value={spent} className="text-ink-muted" />
         </span>
-        <span className="text-neutral-500">
-          {t('drops.won')}: <Money value={totalWon} className="text-amber-400" />
+        <span className="text-ink-faint">
+          {t('drops.won')}: <Money value={totalWon} className="text-accent" />
         </span>
-        <span className={profit >= 0 ? 'font-medium text-emerald-400' : 'font-medium text-red-400'}>
+        <span className={profit >= 0 ? 'font-medium text-positive' : 'font-medium text-negative'}>
           {profit >= 0 ? '+' : '−'}
           <Money value={Math.abs(profit)} />
         </span>
@@ -73,7 +73,7 @@ export function DropResults({ openings, spent }: { openings: OpenCaseResult[]; s
           return (
             <div
               key={opening.openingId}
-              className={`rounded-lg border-t-2 bg-neutral-900 p-3 transition ${isSold ? 'opacity-40' : ''}`}
+              className={`rounded-lg border-t-2 bg-surface-raised p-3 transition ${isSold ? 'opacity-40' : ''}`}
               style={{
                 borderTopColor: color,
                 boxShadow: isSold ? undefined : `0 0 18px -10px ${color}`,
@@ -89,12 +89,12 @@ export function DropResults({ openings, spent }: { openings: OpenCaseResult[]; s
               <div className="mt-1 truncate text-xs" title={opening.item.marketHashName}>
                 {opening.item.marketHashName}
               </div>
-              <Money value={opening.item.price} className="text-sm font-medium text-amber-400" />
+              <Money value={opening.item.price} className="text-sm font-medium text-accent" />
 
               <button
                 onClick={() => void sell([opening.inventoryItemId])}
                 disabled={isSold || busy}
-                className="mt-2 w-full rounded bg-emerald-700 py-1 text-xs font-medium hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+                className="mt-2 w-full rounded-lg bg-positive/20 py-1 text-xs font-medium text-positive transition hover:bg-positive/30 disabled:cursor-not-allowed disabled:bg-surface-overlay disabled:text-ink-faint"
               >
                 {isSold ? t('drops.sold') : t('drops.sell')}
               </button>
@@ -103,20 +103,20 @@ export function DropResults({ openings, spent }: { openings: OpenCaseResult[]; s
         })}
       </div>
 
-      {error && <p className="text-center text-sm text-red-400">{error}</p>}
+      {error && <p className="text-center text-sm text-negative">{error}</p>}
 
       {unsold.length > 0 && (
         <div className="flex flex-wrap justify-center gap-3">
           <button
             onClick={() => void sell(unsold.map((o) => o.inventoryItemId))}
             disabled={busy}
-            className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold hover:bg-emerald-500 disabled:opacity-40"
+            className="cf-btn-primary px-5 py-2 text-sm"
           >
             {busy ? t('drops.selling') : `${t('drops.sellAll')} ${money(unsoldValue)}`}
           </button>
           <a
             href="/profile"
-            className="rounded-lg bg-neutral-800 px-5 py-2 text-sm hover:bg-neutral-700"
+            className="rounded-lg bg-surface-overlay px-5 py-2 text-sm hover:bg-surface-hover"
           >
             {t('drops.keep')}
           </a>

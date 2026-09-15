@@ -89,7 +89,10 @@ export default function AdminPage() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="GGR">
-          <Money value={dashboard.ggr} className={dashboard.ggr >= 0 ? 'text-emerald-400' : 'text-red-400'} />
+          <Money
+            value={dashboard.ggr}
+            className={dashboard.ggr >= 0 ? 'text-emerald-400' : 'text-red-400'}
+          />
         </Stat>
         <Stat label="Wagered">
           <Money value={dashboard.wagered} />
@@ -155,8 +158,8 @@ export default function AdminPage() {
           </table>
         </div>
         <p className="mt-2 text-xs text-neutral-600">
-          A gap between actual and planned RTP over a large sample means either
-          item prices have shifted or the case ticket ranges are wrong.
+          A gap between actual and planned RTP over a large sample means either item prices have
+          shifted or the case ticket ranges are wrong.
         </p>
       </section>
     </div>

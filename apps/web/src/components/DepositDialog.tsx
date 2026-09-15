@@ -59,7 +59,7 @@ export function DepositDialog({ onClose }: { onClose: () => void }) {
       role="presentation"
     >
       <div
-        className="w-full max-w-md rounded-xl border border-neutral-800 bg-neutral-900 p-6"
+        className="w-full max-w-md rounded-xl border border-edge-subtle bg-surface-raised p-6"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -67,12 +67,12 @@ export function DepositDialog({ onClose }: { onClose: () => void }) {
       >
         <div className="mb-4 flex items-start justify-between">
           <h2 className="text-lg font-semibold">{t('deposit.title')}</h2>
-          <button onClick={onClose} className="text-neutral-500 hover:text-neutral-300">
+          <button onClick={onClose} className="text-ink-faint hover:text-ink-muted">
             ✕
           </button>
         </div>
 
-        <div className="mb-4 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+        <div className="mb-4 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-xs text-accent">
           {t('deposit.demoNotice')}
         </div>
 
@@ -83,8 +83,8 @@ export function DepositDialog({ onClose }: { onClose: () => void }) {
               onClick={() => setAmountMajor(String(preset / 100))}
               className={`rounded px-2 py-2 text-sm transition ${
                 amountMinor === preset
-                  ? 'bg-amber-500 font-medium text-neutral-950'
-                  : 'bg-neutral-800 hover:bg-neutral-700'
+                  ? 'bg-accent font-medium text-surface-base'
+                  : 'bg-surface-overlay hover:bg-surface-hover'
               }`}
             >
               {money(preset)}
@@ -93,25 +93,25 @@ export function DepositDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <label className="mb-4 block text-sm">
-          <span className="mb-1 block text-neutral-500">{t('deposit.customAmount')}</span>
+          <span className="mb-1 block text-ink-faint">{t('deposit.customAmount')}</span>
           <input
             value={amountMajor}
             onChange={(e) => setAmountMajor(e.target.value)}
             inputMode="decimal"
             autoFocus
-            className="w-full rounded bg-neutral-800 px-3 py-2"
+            className="w-full rounded bg-surface-overlay px-3 py-2"
           />
         </label>
 
         {!valid && amountMajor !== '' && (
-          <p className="mb-3 text-sm text-red-400">{t('deposit.amountRange')}</p>
+          <p className="mb-3 text-sm text-negative">{t('deposit.amountRange')}</p>
         )}
-        {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
+        {error && <p className="mb-3 text-sm text-negative">{error}</p>}
 
         <button
           onClick={() => void submit()}
           disabled={!valid || busy}
-          className="w-full rounded-lg bg-amber-500 py-2.5 font-semibold text-neutral-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+          className="cf-btn-primary w-full py-2.5"
         >
           {busy ? t('deposit.processing') : `${t('deposit.submit')} ${money(amountMinor)}`}
         </button>

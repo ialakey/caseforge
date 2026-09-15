@@ -2,10 +2,128 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens.
+ *
+ * The palette lives here as custom properties rather than as Tailwind's raw
+ * neutrals scattered through the markup. A case site is almost entirely dark
+ * surfaces stacked on dark surfaces, and telling neutral-900 from neutral-950
+ * across forty files is guesswork — naming the three depths makes the hierarchy
+ * something you read rather than something you measure.
+ */
 :root {
   color-scheme: dark;
+
+  /* Surfaces, from furthest back to nearest the reader. */
+  --surface-base: 222 14% 6%;
+  --surface-raised: 222 13% 9%;
+  --surface-overlay: 222 12% 13%;
+  --surface-hover: 222 12% 17%;
+
+  --border-subtle: 222 10% 18%;
+  --border-strong: 222 10% 26%;
+
+  --text-primary: 220 14% 96%;
+  --text-muted: 220 9% 62%;
+  --text-faint: 220 9% 44%;
+
+  /* Gold is the money colour: balances, prices, the primary action. */
+  --accent: 38 92% 55%;
+  --accent-strong: 32 95% 48%;
+
+  --positive: 152 69% 45%;
+  --negative: 0 72% 58%;
 }
 
 body {
-  @apply bg-neutral-950 text-neutral-100 antialiased;
+  background-color: hsl(var(--surface-base));
+  color: hsl(var(--text-primary));
+  @apply antialiased;
+
+  /*
+   * Two very wide, very dim radial washes. The point is not that anyone should
+   * notice them but that the background stops reading as one flat fill, which
+   * is most of what makes a dark layout look unfinished.
+   */
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--accent) / 0.07), transparent),
+    radial-gradient(ellipse 60% 50% at 90% 0%, hsl(262 83% 58% / 0.05), transparent);
+  background-attachment: fixed;
+}
+
+@layer components {
+  /* A panel: the default container for a block of content. */
+  .cf-panel {
+    background-color: hsl(var(--surface-raised) / 0.75);
+    border: 1px solid hsl(var(--border-subtle));
+    @apply rounded-xl backdrop-blur-sm;
+  }
+
+  /* The primary action. Gold, because it is always about money. */
+  .cf-btn-primary {
+    background-image: linear-gradient(
+      180deg,
+      hsl(var(--accent)),
+      hsl(var(--accent-strong))
+    );
+    @apply rounded-lg font-semibold text-neutral-950 shadow-lg transition;
+    box-shadow: 0 6px 20px -8px hsl(var(--accent) / 0.8);
+  }
+  .cf-btn-primary:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+  .cf-btn-primary:disabled {
+    @apply cursor-not-allowed opacity-40;
+    box-shadow: none;
+    filter: saturate(0.4);
+  }
+
+  /* The quiet action that sits next to it. */
+  .cf-btn-ghost {
+    background-color: hsl(var(--surface-overlay));
+    border: 1px solid hsl(var(--border-subtle));
+    color: hsl(var(--text-primary));
+    @apply rounded-lg font-medium transition;
+  }
+  .cf-btn-ghost:hover:not(:disabled) {
+    background-color: hsl(var(--surface-hover));
+    border-color: hsl(var(--border-strong));
+  }
+  .cf-btn-ghost:disabled {
+    @apply cursor-not-allowed opacity-40;
+  }
+
+  /* A filter chip. Unselected chips have to stay clearly secondary. */
+  .cf-chip {
+    background-color: hsl(var(--surface-overlay));
+    border: 1px solid hsl(var(--border-subtle));
+    color: hsl(var(--text-muted));
+    @apply rounded-full text-xs font-medium transition;
+  }
+  .cf-chip:hover:not(:disabled) {
+    border-color: hsl(var(--border-strong));
+    color: hsl(var(--text-primary));
+  }
+  .cf-chip[data-active='true'] {
+    background-color: hsl(var(--accent) / 0.14);
+    border-color: hsl(var(--accent) / 0.55);
+    color: hsl(var(--accent));
+  }
+}
+
+/* Dark scrollbars: a bright native bar cuts a hole in a dark panel. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border-strong)) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--border-strong));
+  border-radius: 9999px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
 }

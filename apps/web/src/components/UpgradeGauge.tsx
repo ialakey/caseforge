@@ -102,7 +102,8 @@ export function UpgradeGauge({ chance, spinning, result, onSpinEnd }: UpgradeGau
         className="absolute inset-0 flex items-start justify-center"
         style={{
           transform: `rotate(${angle}deg)`,
-          transition: angle === 0 ? 'none' : `transform ${SPIN_MS}ms cubic-bezier(0.12, 0.78, 0.1, 1)`,
+          transition:
+            angle === 0 ? 'none' : `transform ${SPIN_MS}ms cubic-bezier(0.12, 0.78, 0.1, 1)`,
         }}
       >
         <div
@@ -128,7 +129,7 @@ export function UpgradeGauge({ chance, spinning, result, onSpinEnd }: UpgradeGau
             <span className="text-2xl font-bold text-emerald-400">
               {(chance * 100).toFixed(1)}%
             </span>
-            <span className="text-[11px] uppercase tracking-wide text-neutral-600">
+            <span className="text-[11px] uppercase tracking-wide text-ink-faint">
               {t('upgrade.chance')}
             </span>
           </>

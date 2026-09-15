@@ -16,6 +16,38 @@ export default {
           covert: '#eb4b4b',
           extraordinary: '#ffd700',
         },
+        // The design tokens from globals.css, reachable as Tailwind utilities.
+        // Declared with <alpha-value> so `bg-surface-raised/60` keeps working.
+        surface: {
+          base: 'hsl(var(--surface-base) / <alpha-value>)',
+          raised: 'hsl(var(--surface-raised) / <alpha-value>)',
+          overlay: 'hsl(var(--surface-overlay) / <alpha-value>)',
+          hover: 'hsl(var(--surface-hover) / <alpha-value>)',
+        },
+        edge: {
+          subtle: 'hsl(var(--border-subtle) / <alpha-value>)',
+          strong: 'hsl(var(--border-strong) / <alpha-value>)',
+        },
+        ink: {
+          primary: 'hsl(var(--text-primary) / <alpha-value>)',
+          muted: 'hsl(var(--text-muted) / <alpha-value>)',
+          faint: 'hsl(var(--text-faint) / <alpha-value>)',
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent) / <alpha-value>)',
+          strong: 'hsl(var(--accent-strong) / <alpha-value>)',
+        },
+        positive: 'hsl(var(--positive) / <alpha-value>)',
+        negative: 'hsl(var(--negative) / <alpha-value>)',
+      },
+      keyframes: {
+        'fade-up': {
+          from: { opacity: '0', transform: 'translateY(6px)' },
+          to: { opacity: '1', transform: 'none' },
+        },
+      },
+      animation: {
+        'fade-up': 'fade-up 220ms ease-out both',
       },
     },
   },

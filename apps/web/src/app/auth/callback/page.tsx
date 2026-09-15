@@ -26,7 +26,5 @@ export default function AuthCallbackPage() {
     void loadUser().then(() => router.replace('/'));
   }, [loadUser, router]);
 
-  return (
-    <p className="text-neutral-400">{error ?? t('auth.finishing')}</p>
-  );
+  return <p className="text-ink-muted">{error ?? t('auth.finishing')}</p>;
 }

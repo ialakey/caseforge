@@ -23,16 +23,24 @@ export function CatalogueHeadings({
   return (
     <>
       <section>
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-neutral-500">
-          {t('home.latestDrops')}
-        </h2>
+        <SectionHeading>{t('home.latestDrops')}</SectionHeading>
         {children}
       </section>
 
       <section>
-        <h1 className="mb-4 text-2xl font-semibold">{t('home.cases')}</h1>
-        {!hasCases && <p className="text-neutral-500">{t('home.noCases')}</p>}
+        <SectionHeading>{t('home.cases')}</SectionHeading>
+        {!hasCases && <p className="text-ink-faint">{t('home.noCases')}</p>}
       </section>
     </>
+  );
+}
+
+/** A section title with a short accent rule, so blocks read as separate. */
+function SectionHeading({ children }: { children: ReactNode }) {
+  return (
+    <h2 className="mb-3 flex items-center gap-2.5 text-sm font-semibold uppercase tracking-wider text-ink-muted">
+      <span className="h-4 w-1 rounded-full bg-accent" />
+      {children}
+    </h2>
   );
 }

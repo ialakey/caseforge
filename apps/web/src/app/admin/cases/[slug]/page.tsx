@@ -342,19 +342,15 @@ export default function CaseBuilderPage() {
       <section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
         <h2 className="font-medium">Case image</h2>
         <p className="text-sm text-neutral-500">
-          Shown on the showcase and in this list. With no image of its own, borrow the picture
-          of the priciest item in the case — that way the case is recognised by its top skin.
+          Shown on the showcase and in this list. With no image of its own, borrow the picture of
+          the priciest item in the case — that way the case is recognised by its top skin.
         </p>
         <div className="flex flex-wrap items-start gap-3">
           <div className="h-24 w-32 shrink-0 overflow-hidden rounded border border-neutral-800 bg-neutral-950">
             {imageUrl.trim() === '' ? (
               <div className="flex h-full items-center justify-center text-3xl opacity-40">📦</div>
             ) : (
-              <img
-                src={imageUrl}
-                alt="Case image"
-                className="h-full w-full object-contain p-1"
-              />
+              <img src={imageUrl} alt="Case image" className="h-full w-full object-contain p-1" />
             )}
           </div>
           <div className="min-w-[260px] flex-1 space-y-2">
@@ -388,10 +384,10 @@ export default function CaseBuilderPage() {
       <section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
         <h2 className="font-medium">Balance</h2>
         <p className="text-sm text-neutral-500">
-          The odds are solved so the expected return matches the target RTP: the pricier the
-          item, the rarer it is. The working corridor is {(RTP_CORRIDOR.min * 100).toFixed(0)}–
-          {(RTP_CORRIDOR.max * 100).toFixed(0)}%. The server refuses to save a case returning
-          more than 98%: over time such a case runs at a loss.
+          The odds are solved so the expected return matches the target RTP: the pricier the item,
+          the rarer it is. The working corridor is {(RTP_CORRIDOR.min * 100).toFixed(0)}–
+          {(RTP_CORRIDOR.max * 100).toFixed(0)}%. The server refuses to save a case returning more
+          than 98%: over time such a case runs at a loss.
         </p>
 
         <div className="flex flex-wrap items-end gap-3">
@@ -455,8 +451,8 @@ export default function CaseBuilderPage() {
         {items.length > 0 && <p className="text-sm text-neutral-400">{verdict.message}</p>}
         {unconfirmed.length > 0 && (
           <p className="text-sm text-amber-400">
-            Price not confirmed by Steam: {unconfirmed.map((i) => i.name).join(', ')}. The RTP
-            uses those values as they are — check them by hand.
+            Price not confirmed by Steam: {unconfirmed.map((i) => i.name).join(', ')}. The RTP uses
+            those values as they are — check them by hand.
           </p>
         )}
         {itemsWithoutPrice.length > 0 && (
@@ -579,7 +575,8 @@ export default function CaseBuilderPage() {
                     {found.marketHashName}
                   </div>
                   <div className="mt-1 text-[11px] text-neutral-500">
-                    ~${((found.referencePriceUsd ?? 0) / 100).toFixed(2)} · {found.listings} listings
+                    ~${((found.referencePriceUsd ?? 0) / 100).toFixed(2)} · {found.listings}{' '}
+                    listings
                   </div>
                   <button
                     onClick={() => void addItem(found.marketHashName)}

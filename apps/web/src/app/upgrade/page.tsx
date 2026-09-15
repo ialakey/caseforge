@@ -120,7 +120,10 @@ export default function UpgradePage() {
     try {
       const res = await api<UpgradeResult>('/api/upgrade', {
         method: 'POST',
-        body: JSON.stringify({ inventoryItemId: stake.inventoryItemId, targetItemId: target.itemId }),
+        body: JSON.stringify({
+          inventoryItemId: stake.inventoryItemId,
+          targetItemId: target.itemId,
+        }),
       });
       setResult(res);
     } catch (err) {
@@ -146,11 +149,8 @@ export default function UpgradePage() {
     return (
       <div className="space-y-4 text-center">
         <h1 className="text-2xl font-semibold">{t('upgrade.title')}</h1>
-        <p className="text-neutral-400">{t('upgrade.signInHint')}</p>
-        <a
-          href={loginUrl}
-          className="inline-block rounded-lg bg-blue-600 px-6 py-2.5 font-semibold hover:bg-blue-500"
-        >
+        <p className="text-ink-muted">{t('upgrade.signInHint')}</p>
+        <a href={loginUrl} className="cf-btn-primary inline-block px-6 py-2.5">
           {t('nav.signIn')}
         </a>
       </div>
@@ -161,14 +161,14 @@ export default function UpgradePage() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-semibold">{t('upgrade.title')}</h1>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-sm text-ink-faint">
           {t('upgrade.intro', { rtp: (UPGRADE_RTP * 100).toFixed(0) })}
         </p>
       </div>
 
-      {error && <p className="rounded bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>}
+      {error && <p className="rounded bg-negative/15 px-3 py-2 text-sm text-negative">{error}</p>}
 
-      <section className="grid items-center gap-4 rounded-xl border border-neutral-800 bg-neutral-900/60 p-5 md:grid-cols-[1fr_auto_1fr]">
+      <section className="grid items-center gap-4 rounded-xl border border-edge-subtle bg-surface-raised/70 p-5 md:grid-cols-[1fr_auto_1fr]">
         <SlotCard label={t('upgrade.yourItem')} item={stake} emptyHint={t('upgrade.pickStake')} />
 
         <div className="flex flex-col items-center gap-3">
@@ -179,26 +179,28 @@ export default function UpgradePage() {
             chance={result ? result.chance : odds?.ok ? odds.chance : 0}
             spinning={spinning}
             result={
-              result ? { isWin: result.isWin, roll: result.roll, threshold: result.winThreshold } : null
+              result
+                ? { isWin: result.isWin, roll: result.roll, threshold: result.winThreshold }
+                : null
             }
             onSpinEnd={handleSpinEnd}
           />
 
           {odds && !odds.ok && (
-            <p className="max-w-[240px] text-center text-xs text-amber-400">{odds.reason}</p>
+            <p className="max-w-[240px] text-center text-xs text-accent">{odds.reason}</p>
           )}
 
           <button
             onClick={() => void run()}
             disabled={!stake || !target || !odds?.ok || spinning}
-            className="rounded-lg bg-amber-500 px-8 py-2.5 font-semibold text-neutral-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+            className="cf-btn-primary px-8 py-2.5"
           >
             {spinning ? t('upgrade.spinning') : t('upgrade.run')}
           </button>
 
           {result && !spinning && (
             <p
-              className={`text-sm font-medium ${result.isWin ? 'text-emerald-400' : 'text-red-400'}`}
+              className={`text-sm font-medium ${result.isWin ? 'text-positive' : 'text-negative'}`}
             >
               {result.isWin
                 ? t('upgrade.won', { item: result.target.name })
@@ -214,10 +216,10 @@ export default function UpgradePage() {
       </section>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <section className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+        <section className="space-y-3 rounded-xl border border-edge-subtle bg-surface-raised/70 p-4">
           <h2 className="font-medium">{t('upgrade.myItems')}</h2>
           {stakes.length === 0 ? (
-            <p className="text-sm text-neutral-500">{t('upgrade.emptyInventory')}</p>
+            <p className="text-sm text-ink-faint">{t('upgrade.emptyInventory')}</p>
           ) : (
             <div className="grid max-h-[420px] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
               {stakes.map((item) => (
@@ -238,11 +240,11 @@ export default function UpgradePage() {
           )}
         </section>
 
-        <section className="space-y-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+        <section className="space-y-3 rounded-xl border border-edge-subtle bg-surface-raised/70 p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="font-medium">{t('upgrade.upgradeTo')}</h2>
             {targets && (
-              <span className="text-xs text-neutral-500">
+              <span className="text-xs text-ink-faint">
                 {t('upgrade.available')} {money(targets.priceRange.min)} –{' '}
                 {money(targets.priceRange.max)}
               </span>
@@ -254,13 +256,13 @@ export default function UpgradePage() {
             onChange={(e) => setSearch(e.target.value)}
             disabled={!stake}
             placeholder={t('common.search')}
-            className="w-full rounded bg-neutral-800 px-3 py-1.5 text-sm disabled:opacity-40"
+            className="w-full rounded bg-surface-overlay px-3 py-1.5 text-sm disabled:opacity-40"
           />
 
           {!stake ? (
-            <p className="text-sm text-neutral-500">{t('upgrade.pickStakeFirst')}</p>
+            <p className="text-sm text-ink-faint">{t('upgrade.pickStakeFirst')}</p>
           ) : targets && targets.items.length === 0 ? (
-            <p className="text-sm text-neutral-500">{t('upgrade.noTargets')}</p>
+            <p className="text-sm text-ink-faint">{t('upgrade.noTargets')}</p>
           ) : (
             <div className="grid max-h-[420px] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
               {(targets?.items ?? []).map((item) => (
@@ -292,12 +294,17 @@ function SlotCard({
   emptyHint,
 }: {
   label: string;
-  item: { marketHashName: string; imageUrl: string | null; rarity: ItemRarity; price: number } | null;
+  item: {
+    marketHashName: string;
+    imageUrl: string | null;
+    rarity: ItemRarity;
+    price: number;
+  } | null;
   emptyHint: string;
 }) {
   return (
     <div
-      className="flex h-44 flex-col items-center justify-center rounded-lg border bg-neutral-950 p-3"
+      className="flex h-44 flex-col items-center justify-center rounded-lg border bg-surface-base p-3"
       style={{ borderColor: item ? rarityColor(item.rarity) : '#262626' }}
     >
       {item ? (
@@ -311,12 +318,12 @@ function SlotCard({
           <div className="mt-1 max-w-full truncate text-sm" title={item.marketHashName}>
             {item.marketHashName}
           </div>
-          <Money value={item.price} className="text-sm text-amber-400" />
+          <Money value={item.price} className="text-sm text-accent" />
         </>
       ) : (
         <>
-          <span className="text-xs uppercase tracking-wide text-neutral-600">{label}</span>
-          <span className="mt-2 text-sm text-neutral-500">{emptyHint}</span>
+          <span className="text-xs uppercase tracking-wide text-ink-faint">{label}</span>
+          <span className="mt-2 text-sm text-ink-faint">{emptyHint}</span>
         </>
       )}
     </div>
@@ -343,8 +350,8 @@ function PickCard({
   return (
     <button
       onClick={onClick}
-      className={`rounded border-t-2 bg-neutral-950 p-2 text-left transition ${
-        selected ? 'ring-2 ring-amber-400' : 'hover:bg-neutral-800'
+      className={`rounded border-t-2 bg-surface-base p-2 text-left transition ${
+        selected ? 'ring-2 ring-accent' : 'hover:bg-surface-overlay'
       }`}
       style={{ borderTopColor: rarityColor(rarity) }}
     >
@@ -353,8 +360,8 @@ function PickCard({
         {name}
       </div>
       <div className="flex items-center justify-between">
-        <Money value={price} className="text-[11px] text-amber-400" />
-        {badge && <span className="text-[11px] text-emerald-400">{badge}</span>}
+        <Money value={price} className="text-[11px] text-accent" />
+        {badge && <span className="text-[11px] text-positive">{badge}</span>}
       </div>
       <div className="mt-1">
         <RarityBadge rarity={rarity} />
