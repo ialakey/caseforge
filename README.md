@@ -315,6 +315,14 @@ the snapshot the roll would stay reproducible but would no longer mean anything.
 `/bonus` — one spin of the wheel every 24 hours. The prizes are money, a cut off
 the next opening, a free opening up to a price ceiling, or a skin.
 
+<p align="center">
+  <img src="docs/screenshots/bonus-wheel.png" alt="The daily bonus wheel with its eight prize slices and the spin button" width="900">
+</p>
+
+<p align="center">
+  <em>The wheel is a ticket table like a case, and the slices are drawn from the very ranges they are rolled against — the 30% prize takes up 30% of the rim and the 3% one is a sliver.</em>
+</p>
+
 The wheel is not a game of its own. It is a ticket table exactly like a case,
 rolled from the same seed pair and the same shared `nonce` counter, so a spin is
 checked the way a drop is. The slices are drawn in proportion to their real
