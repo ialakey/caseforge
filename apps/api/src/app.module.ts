@@ -14,6 +14,7 @@ import { DropsModule } from './drops/drops.module';
 import { WithdrawalsModule } from './withdrawals/withdrawals.module';
 import { UpgradeModule } from './upgrade/upgrade.module';
 import { ContractsModule } from './contracts/contracts.module';
+import { BonusModule } from './bonus/bonus.module';
 import { AdminModule } from './admin/admin.module';
 
 @Module({
@@ -31,6 +32,7 @@ import { AdminModule } from './admin/admin.module';
     WithdrawalsModule,
     UpgradeModule,
     ContractsModule,
+    BonusModule,
     AdminModule,
   ],
   providers: [

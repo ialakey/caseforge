@@ -49,6 +49,13 @@ enum UpgradeStatus {
   LOST
 }
 
+enum BonusKind {
+  BALANCE // credited to the balance
+  DISCOUNT // a cut off the next opening, in basis points
+  FREE_CASE // one free opening up to a price ceiling
+  FREE_ITEM // a skin up to a price ceiling
+}
+
 enum WithdrawalStatus {
   PENDING // accepted, waiting for a bot
   PROCESSING // a bot is sending the offer
@@ -81,6 +88,11 @@ model User {
   isBanned  Boolean @default(false)
   banReason String?
 
+  /// When the daily wheel was last span. Denormalised on purpose: the cooldown
+  /// is claimed with a conditional UPDATE on this column, which is what makes
+  /// two simultaneous spins impossible without a lock.
+  lastBonusAt DateTime?
+
   /// Groundwork for KYC and geo — filled in at stage 4, but the columns exist
   /// now so the live users table does not need migrating later.
   isVerified  Boolean @default(false)
@@ -101,6 +113,7 @@ model User {
   withdrawals  Withdrawal[]
   upgrades     Upgrade[]
   contracts    Contract[]
+  bonuses      DailyBonus[]
   auditLogs    AuditLog[]      @relation("AuditActor")
 
   @@index([createdAt])
@@ -135,6 +148,7 @@ model Item {
   botItems        BotInventoryItem[]
   upgradeTargets  Upgrade[]          @relation("UpgradeTarget")
   contractRewards Contract[]         @relation("ContractRewardItem")
+  bonusGrants     DailyBonus[]       @relation("BonusItem")
 
   @@index([rarity])
   @@index([isActive])
@@ -215,6 +229,7 @@ model ServerSeed {
   openings  CaseOpening[]
   upgrades  Upgrade[]
   contracts Contract[]
+  bonuses   DailyBonus[]
 
   @@unique([userId, isActive], map: "server_seeds_one_active_per_user")
   @@index([userId])
@@ -235,6 +250,7 @@ model ClientSeed {
   openings  CaseOpening[]
   upgrades  Upgrade[]
   contracts Contract[]
+  bonuses   DailyBonus[]
 
   @@unique([userId, isActive], map: "client_seeds_one_active_per_user")
   @@index([userId])
@@ -298,6 +314,9 @@ model InventoryItem {
   contractStakeId  String? @db.Uuid
   contractRewardId String? @unique @db.Uuid
 
+  /// The wheel spin that granted this item, for a FREE_ITEM prize.
+  bonusRewardId String? @unique @db.Uuid
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   soldAt    DateTime?
@@ -312,6 +331,8 @@ model InventoryItem {
 
   contractStake  Contract? @relation("ContractStake", fields: [contractStakeId], references: [id], onDelete: SetNull)
   contractReward Contract? @relation("ContractReward", fields: [contractRewardId], references: [id], onDelete: SetNull)
+
+  bonusReward DailyBonus? @relation("BonusReward", fields: [bonusRewardId], references: [id], onDelete: SetNull)
 
   @@index([userId, status])
   @@index([withdrawalId])
@@ -406,6 +427,52 @@ model Contract {
   @@index([userId, createdAt])
   @@index([createdAt])
   @@map("contracts")
+}
+
+/// One spin of the daily wheel.
+model DailyBonus {
+  id     String    @id @default(uuid()) @db.Uuid
+  userId String    @db.Uuid
+  kind   BonusKind
+
+  /// Which slice came up, by its stable key rather than its index: reordering
+  /// the wheel later must not re-label what somebody won last month.
+  segmentKey String
+
+  /// Meaning follows the kind — minor units for BALANCE, basis points for
+  /// DISCOUNT, a price ceiling for FREE_CASE and FREE_ITEM.
+  value Int
+
+  /// The item a FREE_ITEM spin turned into, priced at the moment it was granted.
+  itemId    String? @db.Uuid
+  itemPrice Int?
+
+  /// The same seed pair, nonce and roll a case opening records, so a spin is
+  /// checked exactly the way a drop is.
+  serverSeedId String @db.Uuid
+  clientSeedId String @db.Uuid
+  nonce        Int
+  roll         Int
+
+  /// Vouchers — a discount, a free opening — sit here until they are spent.
+  /// BALANCE and FREE_ITEM are settled at spin time and land already consumed.
+  consumedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  item       Item?      @relation("BonusItem", fields: [itemId], references: [id], onDelete: Restrict)
+  serverSeed ServerSeed @relation(fields: [serverSeedId], references: [id], onDelete: Restrict)
+  clientSeed ClientSeed @relation(fields: [clientSeedId], references: [id], onDelete: Restrict)
+
+  reward InventoryItem? @relation("BonusReward")
+
+  /// The same replay protection an opening, an upgrade and a contract have.
+  @@unique([serverSeedId, nonce])
+  @@index([userId, createdAt])
+  /// Finding the vouchers an opening may spend is the hot read on this table.
+  @@index([userId, consumedAt])
+  @@map("daily_bonuses")
 }
 
 model Transaction {

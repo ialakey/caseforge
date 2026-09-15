@@ -63,11 +63,27 @@ console.log('\n1. A contract needs a token');
 }
 
 console.log('\n2. Stakes list');
+{
+  // Open a few cheap cases if the account is short. The inventory suite sells
+  // everything it finds, so running the smoke tests in sequence would otherwise
+  // leave this one with nothing to stake and fail on the order rather than on
+  // the code.
+  let available = await (await fetch(`${API}/api/contracts/stakes`, { headers: auth })).json();
+  if (available.length < CONTRACT_MIN_ITEMS) {
+    const cases = await (await fetch(`${API}/api/cases`)).json();
+    const cheapest = [...cases].sort((a, b) => a.price - b.price)[0];
+    await fetch(`${API}/api/cases/open`, {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ caseId: cheapest.id, count: CONTRACT_MIN_ITEMS }),
+    });
+    console.log(`  (topped the inventory up from "${cheapest.name}")`);
+  }
+}
+
 const stakes = await (await fetch(`${API}/api/contracts/stakes`, { headers: auth })).json();
 assert(Array.isArray(stakes), `returned ${stakes.length} stakeable item(s)`);
-if (stakes.length < CONTRACT_MIN_ITEMS) {
-  throw new Error(`Need at least ${CONTRACT_MIN_ITEMS} available items — open some cases first`);
-}
+assert(stakes.length >= CONTRACT_MIN_ITEMS, `at least ${CONTRACT_MIN_ITEMS} items to stake`);
 
 console.log('\n3. Too few items is refused');
 {

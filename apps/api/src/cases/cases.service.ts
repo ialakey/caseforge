@@ -19,12 +19,14 @@ import {
   calculateRtp,
   pickByRoll,
   rangeChance,
+  resolveItemPrice,
 } from '@caseforge/shared';
 import { computeRoll } from '@caseforge/shared/node';
 import { PrismaService } from '../common/prisma.service';
 import { badRequest, forbidden, notFound } from '../common/app-error';
 import { REDIS_CLIENT } from '../common/redis.module';
 import { DropsService } from '../drops/drops.service';
+import { BonusService } from '../bonus/bonus.service';
 
 /**
  * Openings allowed per window. Counted in cases rather than requests: one
@@ -42,12 +44,13 @@ export class CasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly drops: DropsService,
+    private readonly bonus: BonusService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
   /** Effective item price: a manual override beats the market price. */
   static resolvePrice(item: Pick<Item, 'marketPrice' | 'priceOverride'>): number {
-    return item.priceOverride ?? item.marketPrice;
+    return resolveItemPrice(item);
   }
 
   async listCases(): Promise<CaseView[]> {
@@ -94,7 +97,7 @@ export class CasesService {
     if (!gameCase.isActive) throw badRequest(ErrorCode.CASE_UNAVAILABLE, 'Case unavailable');
     if (gameCase.items.length === 0) throw badRequest(ErrorCode.CASE_EMPTY, 'Case is empty');
 
-    const totalPrice = gameCase.price * count;
+    const listPrice = gameCase.price * count;
 
     const result = await this.prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({
@@ -102,7 +105,14 @@ export class CasesService {
         select: { isBanned: true, banReason: true },
       });
       if (!user) throw notFound(ErrorCode.ACCOUNT_BANNED, 'User not found');
-      if (user.isBanned) throw forbidden(ErrorCode.ACCOUNT_BANNED, user.banReason ?? 'Account is banned');
+      if (user.isBanned)
+        throw forbidden(ErrorCode.ACCOUNT_BANNED, user.banReason ?? 'Account is banned');
+
+      // A wheel voucher is spent here, inside the same transaction as the
+      // debit. Resolving it earlier would let a concurrent opening spend it in
+      // between and charge this one the discounted price for nothing.
+      const bonusApplied = await this.bonus.applyBest(tx, userId, gameCase.price, count);
+      const totalPrice = Math.max(0, listPrice - (bonusApplied?.saving ?? 0));
 
       // Conditional debit: zero affected rows means there was not enough money.
       // Checking the balance and changing it is one atomic operation here.
@@ -203,6 +213,8 @@ export class CasesService {
       return {
         drops,
         balanceAfter,
+        totalPrice,
+        bonusApplied,
         serverSeedHash: serverSeed.seedHash,
         clientSeed: clientSeed.seed,
       };
@@ -236,8 +248,16 @@ export class CasesService {
     return {
       openings,
       balanceAfter: result.balanceAfter,
-      totalSpent: totalPrice,
+      totalSpent: result.totalPrice,
       totalWon: result.drops.reduce((sum, d) => sum + d.itemPrice, 0),
+      bonusApplied: result.bonusApplied
+        ? {
+            segmentKey: result.bonusApplied.segmentKey,
+            kind: result.bonusApplied.kind,
+            value: result.bonusApplied.value,
+            saving: result.bonusApplied.saving,
+          }
+        : null,
     };
   }
 

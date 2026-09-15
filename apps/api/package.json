@@ -16,6 +16,7 @@
     "test:smoke": "node test/smoke.mjs",
     "test:smoke:contracts": "node test/contract-smoke.mjs",
     "test:smoke:inventory": "node test/inventory-smoke.mjs",
+    "test:smoke:bonus": "node test/bonus-smoke.mjs",
     "seed:cases": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/seed-cases.js",
     "refresh-profile": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/refresh-profile.js"
   },

@@ -20,6 +20,7 @@
     "test:smoke": "pnpm --filter @caseforge/api test:smoke",
     "test:smoke:contracts": "pnpm --filter @caseforge/api test:smoke:contracts",
     "test:smoke:inventory": "pnpm --filter @caseforge/api test:smoke:inventory",
+    "test:smoke:bonus": "pnpm --filter @caseforge/api test:smoke:bonus",
     "seed:cases": "pnpm --filter @caseforge/api seed:cases"
   },
   "devDependencies": {
