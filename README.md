@@ -27,7 +27,7 @@ The stack and the architectural decisions are covered in
 
 
 <p align="center">
-  <img src="docs/screenshots/catalogue.png" alt="The case catalogue with the live drop feed above it" width="900">
+  <img src="docs/screenshots/en/catalogue.png" alt="The case catalogue with the live drop feed above it" width="900">
 </p>
 
 <p align="center">
@@ -35,7 +35,7 @@ The stack and the architectural decisions are covered in
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/case-contents.png" alt="A case's contents with the rarity of each item and its exact drop chance" width="900">
+  <img src="docs/screenshots/en/case-contents.png" alt="A case's contents with the rarity of each item and its exact drop chance" width="900">
 </p>
 
 <p align="center">
@@ -236,7 +236,7 @@ it. The tabs split the inventory by what the player is looking for, and the pric
 bands narrow it further.
 
 <p align="center">
-  <img src="docs/screenshots/inventory.png" alt="The inventory filtered to available items, each with a sell and a withdraw button" width="900">
+  <img src="docs/screenshots/en/inventory.png" alt="The inventory filtered to available items, each with a sell and a withdraw button" width="900">
 </p>
 
 <p align="center">
@@ -244,7 +244,7 @@ bands narrow it further.
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/inventory-history.png" alt="The inventory history tab showing sold, withdrawn and staked items" width="900">
+  <img src="docs/screenshots/en/inventory-history.png" alt="The inventory history tab showing sold, withdrawn and staked items" width="900">
 </p>
 
 <p align="center">
@@ -293,7 +293,7 @@ back. Unlike an upgrade there is no losing branch: a contract always pays out,
 the only question is what.
 
 <p align="center">
-  <img src="docs/screenshots/contract.png" alt="A contract with five staked items and the full table of possible outcomes" width="900">
+  <img src="docs/screenshots/en/contract.png" alt="A contract with five staked items and the full table of possible outcomes" width="900">
 </p>
 
 <p align="center">
@@ -320,11 +320,19 @@ the snapshot the roll would stay reproducible but would no longer mean anything.
 the next opening, a free opening up to a price ceiling, or a skin.
 
 <p align="center">
-  <img src="docs/screenshots/bonus-wheel.png" alt="The daily bonus wheel with its eight prize slices and the spin button" width="900">
+  <img src="docs/screenshots/en/bonus-wheel.png" alt="The daily bonus wheel with its eight prize slices and the spin button" width="900">
 </p>
 
 <p align="center">
   <em>The wheel is a ticket table like a case, and the slices are drawn from the very ranges they are rolled against — the 30% prize takes up 30% of the rim and the 3% one is a sliver.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/en/bonus-teaser.png" alt="The landing page with the daily bonus offered under the banner" width="900">
+</p>
+
+<p align="center">
+  <em>The landing page says outright that a spin is waiting. A reward the player has to go looking for is a reward most of them never claim.</em>
 </p>
 
 The wheel is not a game of its own. It is a ticket table exactly like a case,
@@ -352,6 +360,14 @@ Created in the back office at `/admin/promo`. A code is a percentage of the
 top-up or a flat credit, with an optional minimum top-up, a cap on the bonus, a
 total number of uses and a per-player limit.
 
+<p align="center">
+  <img src="docs/screenshots/en/admin-promo.png" alt="The promo code page of the back office with the code list" width="900">
+</p>
+
+<p align="center">
+  <em>Codes are created and edited by code name, and the list shows how many times each has been redeemed against its cap.</em>
+</p>
+
 A code **adds to** the top-up rather than discounting it. That matters once a
 real payment provider is behind the button: the sum charged has to be the sum
 the provider was told about, and a code that changed it would put the two out of
@@ -373,6 +389,14 @@ together both see the last use available and both take it.
 opening rate limit, the wheel's cooldown and the wheel's own slices are stored in
 the database and read at request time, so changing one is a save rather than a
 deploy.
+
+<p align="center">
+  <img src="docs/screenshots/en/admin-settings.png" alt="The settings page of the back office, grouped by area" width="900">
+</p>
+
+<p align="center">
+  <em>Each field is rendered from the registry, key and all — so a setting added in the shared package appears here with no change to the panel.</em>
+</p>
 
 The form is generated from a registry declared once in
 `packages/shared/src/settings.ts` — each setting names its group, its type, its
