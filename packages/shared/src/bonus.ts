@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { type TicketRange, pickByRoll, rangeChance } from './tickets.ts';
 import { distributeRanges } from './balancing.ts';
 
@@ -76,7 +77,67 @@ export const WHEEL_SEGMENTS: readonly WheelSegment[] = [
   { key: 'free-item', kind: BonusKind.FREE_ITEM, share: 0.03, value: 200_00 },
 ];
 
+/**
+ * What an operator is allowed to save as a wheel.
+ *
+ * The shares have to add up to one, because they are about to become ticket
+ * ranges that tile the space: a wheel adding up to 0.9 would leave a tenth of
+ * the rolls matching no slice at all. The tolerance is there because these
+ * arrive as decimals typed by a human and 0.3 + 0.2 + 0.14 is not exactly 0.64
+ * in binary floating point.
+ */
+export const wheelSegmentsSchema = z
+  .array(
+    z.object({
+      key: z
+        .string()
+        .trim()
+        .min(1)
+        .max(40)
+        .regex(/^[a-z0-9-]+$/, 'key: lowercase latin letters, digits and hyphens only'),
+      kind: z.enum([
+        BonusKind.BALANCE,
+        BonusKind.DISCOUNT,
+        BonusKind.FREE_CASE,
+        BonusKind.FREE_ITEM,
+      ]),
+      share: z.number().gt(0).max(1),
+      value: z.number().int().positive(),
+    }),
+  )
+  .min(2)
+  .max(16)
+  .refine(
+    (rows) => new Set(rows.map((r) => r.key)).size === rows.length,
+    'slice keys must be unique',
+  )
+  .refine(
+    (rows) => Math.abs(rows.reduce((sum, r) => sum + r.share, 0) - 1) < 1e-6,
+    'the shares must add up to 1',
+  )
+  .refine(
+    (rows) => rows.every((r) => r.kind !== BonusKind.DISCOUNT || r.value < 10_000),
+    'a discount of 100% or more would make an opening free',
+  );
+
 export type WheelSlice = WheelSegment & TicketRange & { chance: number };
+
+/**
+ * Turns a set of slices into the wheel that is rolled against.
+ *
+ * Kept separate from the constant below so a wheel edited in the admin panel
+ * goes through exactly the same arithmetic as the built-in one — a second path
+ * for operator-supplied slices is how the drawn wheel and the rolled wheel
+ * start to disagree.
+ */
+export function buildWheel(segments: readonly WheelSegment[]): WheelSlice[] {
+  const ranges = distributeRanges(segments.map((s) => s.share));
+  return segments.map((segment, i) => ({
+    ...segment,
+    ...ranges[i]!,
+    chance: rangeChance(ranges[i]!),
+  }));
+}
 
 /**
  * The wheel as ticket ranges.
@@ -85,22 +146,23 @@ export type WheelSlice = WheelSegment & TicketRange & { chance: number };
  * and a past spin stays checkable against it. The ranges tile
  * `[0, TICKET_SPACE - 1]` with no gap, the same invariant a case has to satisfy.
  */
-export const WHEEL: readonly WheelSlice[] = (() => {
-  const ranges = distributeRanges(WHEEL_SEGMENTS.map((s) => s.share));
-  return WHEEL_SEGMENTS.map((segment, i) => ({
-    ...segment,
-    ...ranges[i]!,
-    chance: rangeChance(ranges[i]!),
-  }));
-})();
+export const WHEEL: readonly WheelSlice[] = buildWheel(WHEEL_SEGMENTS);
 
-/** The slice a roll lands on. One function for the server and the check page. */
-export function pickWheelSlice(roll: number): WheelSlice {
-  return pickByRoll(WHEEL, roll);
+/**
+ * The slice a roll lands on. One function for the server and the check page.
+ *
+ * Defaults to the built-in wheel so a caller that has not been given a
+ * configured one still works; the server passes whatever is currently saved.
+ */
+export function pickWheelSlice(roll: number, wheel: readonly WheelSlice[] = WHEEL): WheelSlice {
+  return pickByRoll(wheel, roll);
 }
 
-export function findWheelSlice(key: string): WheelSlice | null {
-  return WHEEL.find((s) => s.key === key) ?? null;
+export function findWheelSlice(
+  key: string,
+  wheel: readonly WheelSlice[] = WHEEL,
+): WheelSlice | null {
+  return wheel.find((s) => s.key === key) ?? null;
 }
 
 /**
@@ -112,14 +174,21 @@ export function findWheelSlice(key: string): WheelSlice | null {
  */
 export const BONUS_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
-export function nextSpinAt(lastSpinAt: Date | string | null): Date | null {
+export function nextSpinAt(
+  lastSpinAt: Date | string | null,
+  cooldownMs: number = BONUS_COOLDOWN_MS,
+): Date | null {
   if (lastSpinAt === null) return null;
   const last = typeof lastSpinAt === 'string' ? new Date(lastSpinAt) : lastSpinAt;
-  return new Date(last.getTime() + BONUS_COOLDOWN_MS);
+  return new Date(last.getTime() + cooldownMs);
 }
 
-export function canSpin(lastSpinAt: Date | string | null, now: Date = new Date()): boolean {
-  const next = nextSpinAt(lastSpinAt);
+export function canSpin(
+  lastSpinAt: Date | string | null,
+  now: Date = new Date(),
+  cooldownMs: number = BONUS_COOLDOWN_MS,
+): boolean {
+  const next = nextSpinAt(lastSpinAt, cooldownMs);
   return next === null || now.getTime() >= next.getTime();
 }
 
@@ -154,8 +223,8 @@ export function voucherSaving(
  * chooses to spend afterwards rather than a fixed sum, so they belong to the
  * case margin rather than to the wheel's own budget.
  */
-export function wheelGrantCost(): number {
-  return WHEEL.reduce(
+export function wheelGrantCost(wheel: readonly WheelSlice[] = WHEEL): number {
+  return wheel.reduce(
     (sum, slice) => (slice.kind === BonusKind.DISCOUNT ? sum : sum + slice.chance * slice.value),
     0,
   );
