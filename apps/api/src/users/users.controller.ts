@@ -1,20 +1,30 @@
 import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import {
-  depositSchema,
+  depositWithPromoSchema,
+  promoCodeSchema,
   paginationSchema,
   setClientSeedSchema,
   tradeUrlSchema,
 } from '@caseforge/shared';
 import { UsersService } from './users.service';
+import { PromoService } from '../promo/promo.service';
 import { CurrentUser, type AuthenticatedUser } from '../common/current-user.decorator';
 import { ZodValidationPipe } from '../common/zod-validation.pipe';
 
 const setTradeUrlSchema = z.object({ tradeUrl: tradeUrlSchema });
 
+const previewPromoSchema = z.object({
+  amount: z.number().int().min(1),
+  promoCode: promoCodeSchema,
+});
+
 @Controller('api/me')
 export class UsersController {
-  constructor(private readonly users: UsersService) {}
+  constructor(
+    private readonly users: UsersService,
+    private readonly promo: PromoService,
+  ) {}
 
   @Get()
   profile(@CurrentUser() user: AuthenticatedUser) {
@@ -32,9 +42,20 @@ export class UsersController {
   @Post('deposit')
   deposit(
     @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(depositSchema)) body: { amount: number },
+    @Body(new ZodValidationPipe(depositWithPromoSchema))
+    body: { amount: number; promoCode?: string | null },
   ) {
-    return this.users.deposit(user.id, body.amount);
+    return this.users.deposit(user.id, body.amount, body.promoCode ?? null);
+  }
+
+  /** What a promo code would add to this top-up, before committing to it. */
+  @Post('promo/preview')
+  previewPromo(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body(new ZodValidationPipe(previewPromoSchema))
+    body: { amount: number; promoCode: string },
+  ) {
+    return this.promo.preview(user.id, body.promoCode, body.amount);
   }
 
   @Get('seeds')

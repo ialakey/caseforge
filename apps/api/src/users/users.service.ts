@@ -5,26 +5,24 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  type PublicUser,
-  ErrorCode,
-  UserRole,
-  parseTradeUrl,
-} from '@caseforge/shared';
-import {
-  generateServerSeed,
-  hashServerSeed,
-} from '@caseforge/shared/node';
+import { type PublicUser, ErrorCode, UserRole, parseTradeUrl } from '@caseforge/shared';
+import { generateServerSeed, hashServerSeed } from '@caseforge/shared/node';
 import { PrismaService } from '../common/prisma.service';
 import { loadConfig } from '../common/config';
 import { badRequest, forbidden } from '../common/app-error';
+import { SettingsService } from '../common/settings.service';
+import { PromoService } from '../promo/promo.service';
 
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   private readonly config = loadConfig();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+    private readonly promo: PromoService,
+  ) {}
 
   /**
    * Stub top-up: credits the entered amount with no payment at all.
@@ -37,9 +35,19 @@ export class UsersService {
    * The credit goes through Transaction like every other money movement,
    * otherwise the nightly reconciliation would flag a mismatch straight away.
    */
-  async deposit(userId: string, amount: number) {
-    if (!this.config.ENABLE_STUB_DEPOSITS) {
+  async deposit(userId: string, amount: number, promoCode?: string | null) {
+    // Two switches have to agree: the environment decides whether the stub
+    // exists at all in this deployment, and the setting lets an operator turn
+    // it off without one.
+    await this.settings.ensureFresh();
+    if (!this.config.ENABLE_STUB_DEPOSITS || !this.settings.get<boolean>('deposits.enabled')) {
       throw forbidden(ErrorCode.DEPOSITS_DISABLED, 'Top-ups are disabled');
+    }
+
+    const min = this.settings.get<number>('deposits.min');
+    const max = this.settings.get<number>('deposits.max');
+    if (amount < min || amount > max) {
+      throw badRequest(ErrorCode.VALIDATION_FAILED, `A top-up must be between ${min} and ${max}`);
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
@@ -48,11 +56,17 @@ export class UsersService {
         select: { isBanned: true, banReason: true },
       });
       if (!user) throw new NotFoundException('User not found');
-      if (user.isBanned) throw forbidden(ErrorCode.ACCOUNT_BANNED, user.banReason ?? 'Account is banned');
+      if (user.isBanned)
+        throw forbidden(ErrorCode.ACCOUNT_BANNED, user.banReason ?? 'Account is banned');
+
+      // The code is redeemed before the money moves, inside the same
+      // transaction: a bonus credited against a deposit that then failed would
+      // be a promotion nobody paid for.
+      const promo = promoCode ? await this.promo.redeem(tx, userId, promoCode, amount) : null;
 
       const updated = await tx.user.update({
         where: { id: userId },
-        data: { balance: { increment: amount } },
+        data: { balance: { increment: amount + (promo?.bonus ?? 0) } },
         select: { balance: true },
       });
 
@@ -61,17 +75,32 @@ export class UsersService {
           userId,
           type: 'DEPOSIT',
           amount,
-          balanceAfter: updated.balance,
+          balanceAfter: updated.balance - (promo?.bonus ?? 0),
           comment: 'Top-up (stub, no real payment)',
         },
       });
 
-      return { balance: updated.balance };
+      // The bonus is its own ledger row rather than being folded into the
+      // deposit: what the player paid and what the promotion gave them are
+      // different kinds of money, and a report that cannot tell them apart
+      // cannot measure what the promotion cost.
+      if (promo && promo.bonus > 0) {
+        await tx.transaction.create({
+          data: {
+            userId,
+            type: 'BONUS',
+            amount: promo.bonus,
+            balanceAfter: updated.balance,
+            referenceId: promo.promoCodeId,
+            comment: `Promo code ${promo.code}`,
+          },
+        });
+      }
+
+      return { balance: updated.balance, promo };
     });
 
-    this.logger.warn(
-      `STUB TOP-UP: credited ${amount} to user ${userId} with no payment`,
-    );
+    this.logger.warn(`STUB TOP-UP: credited ${amount} to user ${userId} with no payment`);
     return result;
   }
 
@@ -105,7 +134,10 @@ export class UsersService {
     // withdrawal would go to somebody else.
     const accountId = (BigInt(user.steamId64) - 76561197960265728n).toString();
     if (parsed.partner !== accountId) {
-      throw badRequest(ErrorCode.TRADE_URL_FOREIGN, 'That trade URL belongs to a different Steam account');
+      throw badRequest(
+        ErrorCode.TRADE_URL_FOREIGN,
+        'That trade URL belongs to a different Steam account',
+      );
     }
 
     await this.prisma.user.update({ where: { id: userId }, data: { tradeUrl } });

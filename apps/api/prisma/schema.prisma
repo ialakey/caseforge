@@ -49,6 +49,11 @@ enum UpgradeStatus {
   LOST
 }
 
+enum PromoKind {
+  PERCENT // a share of the deposit, in basis points
+  FIXED // a flat credit in minor units
+}
+
 enum BonusKind {
   BALANCE // credited to the balance
   DISCOUNT // a cut off the next opening, in basis points
@@ -114,6 +119,7 @@ model User {
   upgrades     Upgrade[]
   contracts    Contract[]
   bonuses      DailyBonus[]
+  promoUses    PromoRedemption[]
   auditLogs    AuditLog[]      @relation("AuditActor")
 
   @@index([createdAt])
@@ -473,6 +479,65 @@ model DailyBonus {
   /// Finding the vouchers an opening may spend is the hot read on this table.
   @@index([userId, consumedAt])
   @@map("daily_bonuses")
+}
+
+/// A promo code that tops the balance up alongside a deposit.
+model PromoCode {
+  id   String    @id @default(uuid()) @db.Uuid
+  /// Stored upper-cased; the lookup upper-cases too, so the player may type it
+  /// however they like.
+  code String    @unique
+  kind PromoKind
+
+  /// Basis points for PERCENT, minor units for FIXED.
+  value Int
+
+  /// Smallest deposit the code applies to.
+  minDeposit Int  @default(0)
+  /// Cap on a percentage bonus; null means uncapped.
+  maxBonus   Int?
+
+  /// Total redemptions allowed; null means unlimited.
+  maxUses Int?
+  /// Denormalised counter, incremented in the same transaction as the
+  /// redemption row. The rows remain the source of truth; this exists so the
+  /// limit can be enforced with a conditional UPDATE instead of a count.
+  usedCount Int @default(0)
+
+  /// How many times one player may use it.
+  perUserLimit Int @default(1)
+
+  isActive Boolean   @default(true)
+  startsAt DateTime?
+  expiresAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  redemptions PromoRedemption[]
+
+  @@index([isActive, expiresAt])
+  @@map("promo_codes")
+}
+
+/// One use of a promo code by one player.
+model PromoRedemption {
+  id          String @id @default(uuid()) @db.Uuid
+  promoCodeId String @db.Uuid
+  userId      String @db.Uuid
+
+  /// What the deposit was and what the code added, both at the time.
+  depositAmount Int
+  bonusAmount   Int
+
+  createdAt DateTime @default(now())
+
+  promoCode PromoCode @relation(fields: [promoCodeId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([promoCodeId, userId])
+  @@index([userId, createdAt])
+  @@map("promo_redemptions")
 }
 
 model Transaction {
