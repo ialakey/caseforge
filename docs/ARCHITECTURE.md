@@ -90,6 +90,7 @@ The key entities (full schema in `apps/api/prisma/schema.prisma`):
 - **Transaction** — the ledger of every balance movement, the single source of truth about money
 - **Upgrade** — a staked upgrade: stake, target, chance, roll, outcome
 - **Contract** — several items traded for one: stake, solved outcome table, roll, reward
+- **DailyBonus** — one spin of the wheel: slice, roll, and whether it is still unspent
 - **Withdrawal** — a withdrawal request tied to a bot and a trade offer
 - **SteamBot** — a farm bot: status, inventory capacity, limits
 - **ServerSeed / ClientSeed** — provable fairness
@@ -269,6 +270,64 @@ does not happen.
 A contract is refused rather than played on bad odds when the catalogue is too
 thin inside the band, or when it holds nothing above the payout the table has to
 average to.
+
+---
+
+## 6b. The daily bonus wheel
+
+One spin every 24 hours, for money, a discount, a free opening, or a skin.
+
+The wheel is a ticket table like a case, rolled from the same seed pair and the
+same shared `nonce` counter. This is the one table in the project that really is
+authored by hand rather than solved, and the reason is that a solver needs a
+single number to optimise: with prizes as different as a rouble credit and a
+knife, there is none. What is bounded instead is the cost — `wheelGrantCost()`
+sums the slices that hand something over, and a test fails if re-tuning ever
+pushes it past the ceiling.
+
+The slices are drawn from the very ticket ranges they are rolled against, so a
+three-percent prize occupies three percent of the rim. A wheel drawn in equal
+wedges over unequal odds is the oldest lie in the genre.
+
+### The cooldown
+
+A rolling day, not a calendar one: a calendar reset hands whoever lives in the
+right timezone two spins a few hours apart, and turns midnight into a load spike
+nobody asked for.
+
+It is claimed with a conditional `UPDATE` on `users.lastBonusAt` rather than read
+and then written. Between a read and a write two requests fired together both
+pass the check and the player spins twice on one day; zero affected rows means
+somebody else already took it. The column is denormalised for exactly this
+reason — deriving the last spin from the bonus table would be tidier and would
+not be claimable in one statement.
+
+### Instant prizes and vouchers
+
+Money and skins are settled inside the spin's transaction and the row is born
+already consumed. A balance credit goes through `Transaction` like every other
+movement, so the nightly reconciliation still adds up.
+
+A discount and a free opening are vouchers: the row stays open until an opening
+spends it. Spending happens inside the opening's own transaction, before the
+debit — resolving it earlier would let a concurrent opening take the voucher in
+between and charge this one a discounted price for nothing. The claim is the same
+conditional `updateMany` the inventory uses, so a voucher cannot be spent twice.
+
+When several vouchers are open, the opening takes whichever saves most on that
+basket. First-in-first-out would be simpler and worse: it burns a half-price
+voucher on the cheapest case in the catalogue while a free opening waits behind
+it. The chosen voucher comes back on the response, because a reward that vanishes
+with the price quietly changing is indistinguishable from a bug.
+
+### The skin prize
+
+A `FREE_ITEM` slice has to turn into a specific skin, and that choice is made
+from the same roll that picked the slice rather than from a second, hidden draw —
+the candidate list is ordered by id, which is stable in a way that ordering by a
+drifting price is not. If the catalogue holds nothing inside the ceiling the
+slice is honoured in money instead: paying nothing at all is the one outcome the
+wheel must never have.
 
 ---
 

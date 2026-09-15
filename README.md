@@ -171,6 +171,8 @@ maintenance for an audience of a few people.
   from the price ratio
 - **contracts**: trade 3 to 10 items for one, over a reward table solved so the
   expected payout is the same 90% the cases run on
+- **a daily bonus wheel**: one spin a day for money, a discount, a free opening
+  or a skin, rolled from the same seed pair as everything else
 - provable fairness: seed pairs, rotation with reveal, and re-verification **in
   the browser** by an independent Web Crypto implementation
 - case opening in a single transaction with an atomic debit and nonce reservation
@@ -308,6 +310,30 @@ the snapshot the roll would stay reproducible but would no longer mean anything.
 
 ---
 
+## Daily bonus
+
+`/bonus` — one spin of the wheel every 24 hours. The prizes are money, a cut off
+the next opening, a free opening up to a price ceiling, or a skin.
+
+The wheel is not a game of its own. It is a ticket table exactly like a case,
+rolled from the same seed pair and the same shared `nonce` counter, so a spin is
+checked the way a drop is. The slices are drawn in proportion to their real
+ticket ranges, which is why the rare ones look thin.
+
+The cooldown is a rolling day rather than a calendar one — a calendar reset hands
+whoever lives in the right timezone two spins a few hours apart. It is claimed
+with a conditional `UPDATE` rather than read and then written: between a read and
+a write, two requests fired together both pass the check.
+
+Money and skins are settled the moment the wheel stops. A discount and a free
+opening are vouchers: they sit on the account until an opening spends them. An
+opening takes whichever voucher saves the most on that particular basket — a
+first-in-first-out queue would burn a half-price voucher on the cheapest case in
+the catalogue while a free opening sat behind it — and says which one it spent,
+so a reward never disappears without explanation.
+
+---
+
 ## Working with cases in the CRM
 
 `/admin/cases` lists the cases with their RTP and margin; `/admin/cases/new`
@@ -377,6 +403,7 @@ apps/
     src/cases/               case opening — the core of the project
     src/upgrade/             upgrade: odds, roll, stake consumption
     src/contracts/           contracts: solved outcome table, roll, reward
+    src/bonus/               the daily wheel: cooldown, roll, vouchers
     src/inventory/           inventory: filters, selling, the withdrawal stub
     src/drops/               batched WebSocket feed
     src/withdrawals/         withdrawal requests and queueing
@@ -391,7 +418,7 @@ apps/
     src/withdrawal-processor.ts  idempotent request handling
     scripts/add-bot.ts       bot registration
   web/
-    src/app/                 home, case, upgrade, contract, profile, CRM, Steam callback
+    src/app/                 home, case, upgrade, contract, bonus, profile, CRM, Steam callback
     src/app/admin/cases/     case list and builder
     src/components/          drop feed, opening reel, cards, switches
     src/lib/                 API client, auth store, settings store, socket
@@ -404,6 +431,7 @@ packages/
     src/balancing.ts         auto-solved odds for a target RTP, margin verdict
     src/upgrade.ts           upgrade odds and bounds
     src/contract.ts          contract reward table: the tilt and its solver
+    src/bonus.ts             the wheel: slices, ticket ranges, cooldown
     src/inventory.ts         inventory statuses, filters and price bands
     src/steam-market.ts      market response parsing: prices, rarity, images
     src/provably-fair.ts     server-side cryptography (node:crypto)
