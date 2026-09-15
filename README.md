@@ -169,6 +169,8 @@ maintenance for an audience of a few people.
 - **instant sale of a drop** straight from the results panel, per item or all at once
 - **upgrade**: stake your skin against a pricier one, with the chance derived
   from the price ratio
+- **contracts**: trade 3 to 10 items for one, over a reward table solved so the
+  expected payout is the same 90% the cases run on
 - provable fairness: seed pairs, rotation with reveal, and re-verification **in
   the browser** by an independent Web Crypto implementation
 - case opening in a single transaction with an atomic debit and nonce reservation
@@ -221,6 +223,32 @@ The trade URL is checked against the account: `partner` in it is the low 32 bits
 of the SteamID64, and somebody else's link is rejected before a withdrawal could
 follow it.
 
+Items are never deleted from the inventory. Selling, withdrawing or staking one
+moves it to another status and it stays on the account as a record of what
+happened — a player who sold a knife can still find it and see what they got for
+it. The tabs split the inventory by what the player is looking for, and the price
+bands narrow it further.
+
+<p align="center">
+  <img src="docs/screenshots/inventory.png" alt="The inventory filtered to available items, each with a sell and a withdraw button" width="900">
+</p>
+
+<p align="center">
+  <em>Available items, filtered by state and price band. Selling everything on screen asks for confirmation and names the amount first.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/inventory-history.png" alt="The inventory history tab showing sold, withdrawn and staked items" width="900">
+</p>
+
+<p align="center">
+  <em>The same inventory on its history tab: sold, withdrawn and staked items keep their row and carry the status that explains where they went.</em>
+</p>
+
+**Withdrawal from the inventory is a stub.** It marks the item withdrawn and does
+nothing else — no bot, no trade offer, no queue. The real path is the withdrawals
+module described further down, and it is untouched by it.
+
 **Top-up is a stub.** The button credits the entered amount with no payment at
 all. It exists so the gameplay loop can be exercised before a payment provider
 is wired in. The credit still goes through `Transaction`, so the nightly balance
@@ -249,6 +277,34 @@ formula as the chance, so the list never offers an option the server will refuse
 The outcome comes from the same roll as a case opening — the same seed pair and
 the shared `nonce` counter. The upgrade needs no fairness page of its own: it is
 verified exactly the same way.
+
+---
+
+## Contracts
+
+`/contract` — the player throws between 3 and 10 items in and gets exactly one
+back. Unlike an upgrade there is no losing branch: a contract always pays out,
+the only question is what.
+
+<p align="center">
+  <img src="docs/screenshots/contract.png" alt="A contract with five staked items and the full table of possible outcomes" width="900">
+</p>
+
+<p align="center">
+  <em>The staked items, the reward band they imply, and the table the roll will actually run against — every outcome with the chance the server computed for it.</em>
+</p>
+
+The table is not authored by hand. Rewards are drawn from the catalogue in a band
+of 0.1x to 5x the staked sum, and the weights are solved so the expected reward
+equals `stake × 90%` — the same margin the cases and the upgrade run on. The
+weights follow an exponential tilt over the pool, with the exponent found by
+bisection. The point of the construction is that the margin becomes a constant of
+the system rather than a property of whatever happens to be priced inside the
+band.
+
+The solved table is snapshotted onto the contract row. The pool comes from a live
+catalogue and cannot be rebuilt later from prices that have since moved — without
+the snapshot the roll would stay reproducible but would no longer mean anything.
 
 ---
 
@@ -320,6 +376,8 @@ apps/
     src/auth/                Steam OpenID + JWT
     src/cases/               case opening — the core of the project
     src/upgrade/             upgrade: odds, roll, stake consumption
+    src/contracts/           contracts: solved outcome table, roll, reward
+    src/inventory/           inventory: filters, selling, the withdrawal stub
     src/drops/               batched WebSocket feed
     src/withdrawals/         withdrawal requests and queueing
     src/admin/               CRM: reports, case builder, audit
@@ -333,7 +391,7 @@ apps/
     src/withdrawal-processor.ts  idempotent request handling
     scripts/add-bot.ts       bot registration
   web/
-    src/app/                 home, case, upgrade, profile, CRM, Steam callback
+    src/app/                 home, case, upgrade, contract, profile, CRM, Steam callback
     src/app/admin/cases/     case list and builder
     src/components/          drop feed, opening reel, cards, switches
     src/lib/                 API client, auth store, settings store, socket
@@ -345,6 +403,8 @@ packages/
     src/tickets.ts           ticket space, range validation, RTP
     src/balancing.ts         auto-solved odds for a target RTP, margin verdict
     src/upgrade.ts           upgrade odds and bounds
+    src/contract.ts          contract reward table: the tilt and its solver
+    src/inventory.ts         inventory statuses, filters and price bands
     src/steam-market.ts      market response parsing: prices, rarity, images
     src/provably-fair.ts     server-side cryptography (node:crypto)
     src/verify.ts            in-browser re-verification (Web Crypto)
