@@ -10,6 +10,7 @@ export * from './steam-profile.ts';
 export * from './upgrade.ts';
 export * from './contract.ts';
 export * from './inventory.ts';
+export * from './bonus.ts';
 export * from './money.ts';
 export * from './types.ts';
 export * from './schemas.ts';

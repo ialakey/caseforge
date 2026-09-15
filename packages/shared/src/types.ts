@@ -82,8 +82,21 @@ export interface OpenCaseResult {
 export interface OpenCaseBatchResult {
   openings: OpenCaseResult[];
   balanceAfter: number;
+  /** What was actually charged, after any bonus. */
   totalSpent: number;
   totalWon: number;
+  /**
+   * The wheel voucher this opening spent, if there was one. Present so the
+   * interface can say what happened to a reward the player had been sitting
+   * on rather than silently charging them less.
+   */
+  bonusApplied: {
+    segmentKey: string;
+    kind: string;
+    value: number;
+    /** How much it took off, in minor units. */
+    saving: number;
+  } | null;
 }
 
 /** How many cases may be opened at once. */

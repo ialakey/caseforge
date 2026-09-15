@@ -82,3 +82,13 @@ export function formatMoney(
 export function sellPrice(itemPrice: Minor, feeBps: number): Minor {
   return Math.floor((itemPrice * (10_000 - feeBps)) / 10_000);
 }
+
+/**
+ * Effective price of a catalogue item: a manual override beats the market.
+ *
+ * Lives here rather than on a service because several of them need it, and a
+ * second copy of the rule is how the showcase and the payout start disagreeing.
+ */
+export function resolveItemPrice(item: { marketPrice: Minor; priceOverride: Minor | null }): Minor {
+  return item.priceOverride ?? item.marketPrice;
+}
