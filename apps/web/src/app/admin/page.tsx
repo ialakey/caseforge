@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/store';
@@ -74,12 +73,6 @@ export default function AdminPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">CRM · last 30 days</h1>
-        <Link
-          href="/admin/cases"
-          className="rounded bg-neutral-800 px-3 py-1.5 text-sm hover:bg-neutral-700"
-        >
-          Cases
-        </Link>
       </div>
       <div>
         <p className="mt-1 text-sm text-neutral-500">

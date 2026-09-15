@@ -28,8 +28,42 @@ export function DepositDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [promoDraft, setPromoDraft] = useState('');
+  const [promo, setPromo] = useState<{ code: string; bonus: number } | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [checkingPromo, setCheckingPromo] = useState(false);
+
   const amountMinor = Math.round(Number.parseFloat(amountMajor.replace(',', '.')) * 100) || 0;
   const valid = amountMinor >= 100 && amountMinor <= 100_000_00;
+
+  /**
+   * Checks a code before the money moves.
+   *
+   * Only ever a quote: the server re-checks it inside the deposit, because
+   * between this call and the button the code may be used up by somebody else.
+   */
+  async function applyPromo(): Promise<void> {
+    const code = promoDraft.trim();
+    if (code === '') return;
+    setCheckingPromo(true);
+    setPromoError(null);
+    try {
+      const res = await api<{ code: string; bonus: number }>('/api/me/promo/preview', {
+        method: 'POST',
+        body: JSON.stringify({ amount: amountMinor, promoCode: code }),
+      });
+      setPromo(res);
+    } catch (err) {
+      setPromo(null);
+      setPromoError(
+        err instanceof ApiError
+          ? translateError(locale, err.code, err.message)
+          : t('promo.invalid'),
+      );
+    } finally {
+      setCheckingPromo(false);
+    }
+  }
 
   async function submit(): Promise<void> {
     setBusy(true);
@@ -37,7 +71,7 @@ export function DepositDialog({ onClose }: { onClose: () => void }) {
     try {
       const res = await api<{ balance: number }>('/api/me/deposit', {
         method: 'POST',
-        body: JSON.stringify({ amount: amountMinor }),
+        body: JSON.stringify({ amount: amountMinor, promoCode: promo?.code ?? null }),
       });
       setBalance(res.balance);
       onClose();
@@ -106,6 +140,44 @@ export function DepositDialog({ onClose }: { onClose: () => void }) {
         {!valid && amountMajor !== '' && (
           <p className="mb-3 text-sm text-negative">{t('deposit.amountRange')}</p>
         )}
+
+        {/* The code is checked on its own rather than on submit, so a typo is
+            caught before the player commits to a top-up. */}
+        <div className="mb-3">
+          <span className="mb-1 block text-sm text-ink-muted">{t('promo.label')}</span>
+          <div className="flex gap-2">
+            <input
+              value={promoDraft}
+              onChange={(e) => {
+                setPromoDraft(e.target.value);
+                setPromo(null);
+                setPromoError(null);
+              }}
+              placeholder={t('promo.placeholder')}
+              className="min-w-0 flex-1 rounded bg-surface-overlay px-3 py-2 uppercase"
+            />
+            <button
+              onClick={() => void applyPromo()}
+              disabled={promoDraft.trim() === '' || !valid || checkingPromo}
+              className="cf-btn-ghost shrink-0 px-4 py-2 text-sm"
+            >
+              {t('promo.apply')}
+            </button>
+          </div>
+          {promo && (
+            <p className="mt-1.5 text-sm text-positive">
+              {t('promo.applied', { code: promo.code, bonus: money(promo.bonus) })}
+            </p>
+          )}
+          {promoError && <p className="mt-1.5 text-sm text-negative">{promoError}</p>}
+        </div>
+
+        {promo && (
+          <p className="mb-3 text-sm text-ink-muted">
+            {t('promo.total', { total: money(amountMinor + promo.bonus) })}
+          </p>
+        )}
+
         {error && <p className="mb-3 text-sm text-negative">{error}</p>}
 
         <button

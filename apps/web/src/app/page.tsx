@@ -1,6 +1,7 @@
 import type { CaseView } from '@caseforge/shared';
 import { CaseCard } from '../components/CaseCard';
 import { CatalogueHeadings } from '../components/CatalogueHeadings';
+import { BonusTeaser } from '../components/BonusTeaser';
 import { Hero } from '../components/Hero';
 import { LiveDrops } from '../components/LiveDrops';
 
@@ -25,6 +26,10 @@ export default async function HomePage() {
   return (
     <div className="space-y-10">
       <Hero caseCount={cases.length} itemCount={distinctItems} />
+
+      {/* Right under the banner: a player who has a spin waiting should not
+          have to find the bonus page to learn that. */}
+      <BonusTeaser />
 
       <CatalogueHeadings hasCases={cases.length > 0}>
         <LiveDrops />
