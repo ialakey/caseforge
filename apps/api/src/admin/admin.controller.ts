@@ -8,12 +8,17 @@ import {
   paginationSchema,
   steamSearchSchema,
   upsertCaseSchema,
+  upsertPromoCodeSchema,
+  settingDefinitions,
   type UpsertCaseInput,
+  type UpsertPromoCodeInput,
 } from '@caseforge/shared';
 import { AdminService } from './admin.service';
 import { CasesService } from '../cases/cases.service';
 import { SteamMarketService } from '../steam/steam-market.service';
 import { ItemSyncService } from '../steam/item-sync.service';
+import { SettingsService } from '../common/settings.service';
+import { PromoService } from '../promo/promo.service';
 import { Roles } from '../common/roles.decorator';
 import { RolesGuard } from '../common/roles.guard';
 import { CurrentUser, type AuthenticatedUser } from '../common/current-user.decorator';
@@ -22,6 +27,18 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe';
 const periodSchema = z.object({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
+});
+
+const botStatusSchema = z.object({
+  status: z.enum(['DISABLED', 'OFFLINE']),
+});
+
+/**
+ * Settings arrive as a partial map. Validating the individual values is the
+ * registry's job, so this only pins the envelope.
+ */
+const saveSettingsSchema = z.object({
+  values: z.record(z.string(), z.unknown()),
 });
 
 const banSchema = z.object({
@@ -45,6 +62,8 @@ export class AdminController {
     private readonly cases: CasesService,
     private readonly market: SteamMarketService,
     private readonly itemSync: ItemSyncService,
+    private readonly settings: SettingsService,
+    private readonly promo: PromoService,
   ) {}
 
   @Get('dashboard')
@@ -74,7 +93,9 @@ export class AdminController {
    * Steam throttles hard, so responses are cached for an hour.
    */
   @Get('steam/search')
-  steamSearch(@Query(new ZodValidationPipe(steamSearchSchema)) query: { query: string; count: number }) {
+  steamSearch(
+    @Query(new ZodValidationPipe(steamSearchSchema)) query: { query: string; count: number },
+  ) {
     return this.market.search(query.query, query.count);
   }
 
@@ -99,6 +120,59 @@ export class AdminController {
   @Get('bots')
   bots() {
     return this.admin.listBots();
+  }
+
+  /**
+   * The settings registry and its current values.
+   *
+   * The definitions travel with the values so the panel can render the form
+   * without knowing what settings exist — adding one is a line in the shared
+   * registry and nothing here.
+   */
+  @Get('settings')
+  settingsList() {
+    return this.settings.all().then((values) => ({
+      definitions: settingDefinitions(),
+      values,
+    }));
+  }
+
+  @Post('settings')
+  @Roles(UserRole.ADMIN)
+  saveSettings(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Body(new ZodValidationPipe(saveSettingsSchema)) body: { values: Record<string, unknown> },
+    @Req() request: FastifyRequest,
+  ) {
+    return this.admin.saveSettings(actor.id, body.values, request.ip ?? null);
+  }
+
+  @Get('promo-codes')
+  promoCodes() {
+    return this.promo.list();
+  }
+
+  @Post('promo-codes')
+  @Roles(UserRole.ADMIN)
+  upsertPromoCode(@Body(new ZodValidationPipe(upsertPromoCodeSchema)) body: UpsertPromoCodeInput) {
+    return this.promo.upsert(body);
+  }
+
+  @Post('promo-codes/:id/deactivate')
+  @Roles(UserRole.ADMIN)
+  deactivatePromoCode(@Param('id') id: string) {
+    return this.promo.deactivate(id);
+  }
+
+  @Post('bots/:id/status')
+  @Roles(UserRole.ADMIN)
+  setBotStatus(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(botStatusSchema)) body: { status: 'DISABLED' | 'OFFLINE' },
+    @Req() request: FastifyRequest,
+  ) {
+    return this.admin.setBotStatus(actor.id, id, body.status, request.ip ?? null);
   }
 
   @Get('audit')
@@ -149,7 +223,8 @@ export class AdminController {
   @Roles(UserRole.ADMIN)
   adjustBalance(
     @CurrentUser() actor: AuthenticatedUser,
-    @Body(new ZodValidationPipe(adjustBalanceSchema)) body: { userId: string; amount: number; reason: string },
+    @Body(new ZodValidationPipe(adjustBalanceSchema))
+    body: { userId: string; amount: number; reason: string },
     @Req() request: FastifyRequest,
   ) {
     return this.admin.adjustBalance(

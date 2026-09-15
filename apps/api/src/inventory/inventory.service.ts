@@ -9,14 +9,10 @@ import {
   statusesForFilter,
 } from '@caseforge/shared';
 import { PrismaService } from '../common/prisma.service';
+import { SettingsService } from '../common/settings.service';
 import { badRequest } from '../common/app-error';
 
-/**
- * Fee taken when an item is sold back to the site, in basis points
- * (1 bps = 0.01%). A candidate for the settings table once the admin panel
- * needs to tune it.
- */
-const SELL_FEE_BPS = 0;
+/** Fee taken when an item is sold back, in basis points (1 bps = 0.01%). */
 
 /**
  * How many rows one inventory request may return.
@@ -30,7 +26,15 @@ const INVENTORY_PAGE_SIZE = 500;
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+  ) {}
+
+  /** The configured sell-back fee. Read once per operation, not per item. */
+  private async sellFeeBps(): Promise<number> {
+    return this.settings.read<number>('economy.sellFeeBps');
+  }
 
   /**
    * The player's items.
@@ -41,6 +45,7 @@ export class InventoryService {
    * tabs without issuing a request per tab.
    */
   async list(userId: string, filter: InventoryFilter = 'all', band: PriceBandKey = 'all') {
+    const feeBps = await this.sellFeeBps();
     const where: Prisma.InventoryItemWhereInput = {
       userId,
       status: { in: statusesForFilter(filter) },
@@ -67,7 +72,7 @@ export class InventoryService {
       id: inv.id,
       status: inv.status,
       acquiredPrice: inv.acquiredPrice,
-      sellPrice: sellPrice(inv.acquiredPrice, SELL_FEE_BPS),
+      sellPrice: sellPrice(inv.acquiredPrice, feeBps),
       createdAt: inv.createdAt.toISOString(),
       // When the row last moved status — what the history is sorted and dated
       // by. soldAt is the exact moment for a sale; for everything else the row
@@ -132,6 +137,7 @@ export class InventoryService {
     inventoryItemIds: string[],
   ): Promise<{ sold: number; total: number; balance: number }> {
     const uniqueIds = [...new Set(inventoryItemIds)];
+    const feeBps = await this.sellFeeBps();
 
     return this.prisma.$transaction(async (tx) => {
       const items = await tx.inventoryItem.findMany({
@@ -149,7 +155,7 @@ export class InventoryService {
         throw badRequest(ErrorCode.ITEM_ALREADY_SOLD, 'Some items have already been sold');
       }
 
-      return this.credit(tx, userId, items);
+      return this.credit(tx, userId, items, feeBps);
     });
   }
 
@@ -167,6 +173,7 @@ export class InventoryService {
     band: PriceBandKey = 'all',
   ): Promise<{ sold: number; total: number; balance: number }> {
     const priceBand = findPriceBand(band);
+    const feeBps = await this.sellFeeBps();
 
     return this.prisma.$transaction(async (tx) => {
       const where: Prisma.InventoryItemWhereInput = {
@@ -199,7 +206,7 @@ export class InventoryService {
         throw badRequest(ErrorCode.ITEMS_CHANGED, 'The inventory changed, please try again');
       }
 
-      return this.credit(tx, userId, items);
+      return this.credit(tx, userId, items, feeBps);
     });
   }
 
@@ -249,8 +256,9 @@ export class InventoryService {
     tx: Prisma.TransactionClient,
     userId: string,
     items: readonly { acquiredPrice: number }[],
+    feeBps: number,
   ): Promise<{ sold: number; total: number; balance: number }> {
-    const total = items.reduce((sum, i) => sum + sellPrice(i.acquiredPrice, SELL_FEE_BPS), 0);
+    const total = items.reduce((sum, i) => sum + sellPrice(i.acquiredPrice, feeBps), 0);
 
     const updated = await tx.user.update({
       where: { id: userId },

@@ -8,13 +8,16 @@ import {
   validateTicketRanges,
 } from '@caseforge/shared';
 import { PrismaService } from '../common/prisma.service';
+import { SettingsService } from '../common/settings.service';
 import { CasesService } from '../cases/cases.service';
+import { badRequest, notFound } from '../common/app-error';
 
 @Injectable()
 export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cases: CasesService,
+    private readonly settings: SettingsService,
   ) {}
 
   /**
@@ -366,7 +369,13 @@ export class AdminService {
     return result;
   }
 
-  async setBanned(actorId: string, userId: string, isBanned: boolean, reason: string | null, ip: string | null) {
+  async setBanned(
+    actorId: string,
+    userId: string,
+    isBanned: boolean,
+    reason: string | null,
+    ip: string | null,
+  ) {
     const before = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { isBanned: true, banReason: true },
@@ -433,6 +442,73 @@ export class AdminService {
     return { total, page, perPage, items };
   }
 
+  /**
+   * Saves a batch of settings and records what changed.
+   *
+   * The audit entry holds the values that were actually stored rather than the
+   * ones submitted, because validation coerces — an operator typing "60" into
+   * a number field should see 60 in the log, not "60".
+   */
+  async saveSettings(
+    actorId: string,
+    entries: Record<string, unknown>,
+    ip: string | null,
+  ): Promise<Record<string, unknown>> {
+    const before = await this.settings.all();
+    const result = await this.settings.setMany(entries);
+    if (!result.ok) {
+      throw badRequest(ErrorCode.VALIDATION_FAILED, result.errors.join('; '));
+    }
+
+    // Only the keys that moved: a diff of a dozen settings where one changed
+    // is a log nobody reads.
+    const changed = Object.fromEntries(
+      Object.entries(result.saved).filter(
+        ([k, v]) => JSON.stringify((before as Record<string, unknown>)[k]) !== JSON.stringify(v),
+      ),
+    );
+    const previous = Object.fromEntries(
+      Object.keys(changed).map((k) => [k, (before as Record<string, unknown>)[k]]),
+    );
+
+    if (Object.keys(changed).length > 0) {
+      await this.audit(actorId, 'settings.update', 'Setting', null, previous, changed, ip);
+    }
+    return this.settings.all();
+  }
+
+  /**
+   * Changes a bot's status by hand.
+   *
+   * The worker owns the lifecycle, so this exists for the two transitions an
+   * operator genuinely needs: taking a misbehaving bot out of rotation, and
+   * putting it back. Anything else would be fighting the worker.
+   */
+  async setBotStatus(
+    actorId: string,
+    botId: string,
+    status: 'DISABLED' | 'OFFLINE',
+    ip: string | null,
+  ) {
+    const before = await this.prisma.steamBot.findUnique({ where: { id: botId } });
+    if (!before) throw notFound(ErrorCode.VALIDATION_FAILED, 'Bot not found');
+
+    const after = await this.prisma.steamBot.update({
+      where: { id: botId },
+      data: { status },
+    });
+    await this.audit(
+      actorId,
+      'bot.setStatus',
+      'SteamBot',
+      botId,
+      { status: before.status },
+      { status: after.status },
+      ip,
+    );
+    return { id: after.id, status: after.status };
+  }
+
   private async audit(
     actorId: string,
     action: string,
@@ -448,8 +524,12 @@ export class AdminService {
         action,
         entityType,
         entityId,
-        before: before === null ? undefined : (JSON.parse(JSON.stringify(before)) as Prisma.InputJsonValue),
-        after: after === null ? undefined : (JSON.parse(JSON.stringify(after)) as Prisma.InputJsonValue),
+        before:
+          before === null
+            ? undefined
+            : (JSON.parse(JSON.stringify(before)) as Prisma.InputJsonValue),
+        after:
+          after === null ? undefined : (JSON.parse(JSON.stringify(after)) as Prisma.InputJsonValue),
         ip,
       },
     });

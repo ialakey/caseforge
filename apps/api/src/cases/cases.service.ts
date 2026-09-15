@@ -27,13 +27,14 @@ import { badRequest, forbidden, notFound } from '../common/app-error';
 import { REDIS_CLIENT } from '../common/redis.module';
 import { DropsService } from '../drops/drops.service';
 import { BonusService } from '../bonus/bonus.service';
+import { SettingsService } from '../common/settings.service';
 
 /**
- * Openings allowed per window. Counted in cases rather than requests: one
- * "x10" button press is ten openings, and script protection must see it that way.
+ * The rate limit is counted in cases rather than requests: one "x10" button
+ * press is ten openings, and script protection must see it that way. Both the
+ * allowance and the window are settings, so an operator can tighten them
+ * during an incident without a deploy.
  */
-const OPEN_RATE_LIMIT = 60;
-const OPEN_RATE_WINDOW_SEC = 10;
 
 type CaseWithItems = Case & { items: (CaseItem & { item: Item })[] };
 
@@ -45,6 +46,7 @@ export class CasesService {
     private readonly prisma: PrismaService,
     private readonly drops: DropsService,
     private readonly bonus: BonusService,
+    private readonly settings: SettingsService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
@@ -86,6 +88,9 @@ export class CasesService {
         ErrorCode.BATCH_SIZE_INVALID,
         `Between 1 and ${MAX_CASES_PER_OPEN} cases may be opened at once`,
       );
+    }
+    if (await this.settings.read<boolean>('site.maintenance')) {
+      throw badRequest(ErrorCode.MAINTENANCE, 'The site is in maintenance mode');
     }
     await this.enforceRateLimit(userId, count);
 
@@ -287,10 +292,14 @@ export class CasesService {
   }
 
   private async enforceRateLimit(userId: string, count: number): Promise<void> {
+    await this.settings.ensureFresh();
+    const allowance = this.settings.get<number>('limits.openPerWindow');
+    const windowSec = this.settings.get<number>('limits.openWindowSec');
+
     const key = `ratelimit:open:${userId}`;
     const used = await this.redis.incrby(key, count);
-    if (used === count) await this.redis.expire(key, OPEN_RATE_WINDOW_SEC);
-    if (used > OPEN_RATE_LIMIT) {
+    if (used === count) await this.redis.expire(key, windowSec);
+    if (used > allowance) {
       throw badRequest(ErrorCode.RATE_LIMITED, 'Too fast. Wait a couple of seconds.');
     }
   }

@@ -3,10 +3,10 @@ import type { Prisma } from '@prisma/client';
 import {
   type BonusKind,
   type ItemRarity,
+  type WheelSegment,
   type WheelSlice,
-  BONUS_COOLDOWN_MS,
   ErrorCode,
-  WHEEL,
+  buildWheel,
   isVoucher,
   nextSpinAt,
   pickWheelSlice,
@@ -16,6 +16,7 @@ import {
 import { computeRoll } from '@caseforge/shared/node';
 import { PrismaService } from '../common/prisma.service';
 import { badRequest, forbidden } from '../common/app-error';
+import { SettingsService } from '../common/settings.service';
 
 /** A voucher sitting on the account, waiting to be spent on an opening. */
 export interface VoucherView {
@@ -29,6 +30,8 @@ export interface VoucherView {
 export interface BonusStatus {
   /** The wheel itself, so the interface draws what the server will roll. */
   wheel: readonly WheelSlice[];
+  /** Whether the feature is switched on at all. */
+  enabled: boolean;
   canSpin: boolean;
   lastSpinAt: string | null;
   nextSpinAt: string | null;
@@ -69,7 +72,25 @@ export interface AppliedBonus {
 
 @Injectable()
 export class BonusService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+  ) {}
+
+  /**
+   * The wheel as currently configured, and how long between spins.
+   *
+   * Built through the same `buildWheel` the constant uses, so an operator's
+   * slices get the identical ticket arithmetic — a second path for edited
+   * wheels is how the drawn wheel and the rolled wheel start to disagree.
+   */
+  private async wheelConfig(): Promise<{ wheel: WheelSlice[]; cooldownMs: number }> {
+    await this.settings.ensureFresh();
+    return {
+      wheel: buildWheel(this.settings.get<WheelSegment[]>('bonus.wheel')),
+      cooldownMs: this.settings.get<number>('bonus.cooldownHours') * 60 * 60 * 1000,
+    };
+  }
 
   /** The wheel, the cooldown and whatever vouchers are still unspent. */
   async status(userId: string): Promise<BonusStatus> {
@@ -84,10 +105,13 @@ export class BonusService {
       orderBy: { createdAt: 'asc' },
     });
 
-    const next = nextSpinAt(user.lastBonusAt);
+    const { wheel, cooldownMs } = await this.wheelConfig();
+    const enabled = this.settings.get<boolean>('bonus.enabled');
+    const next = nextSpinAt(user.lastBonusAt, cooldownMs);
     return {
-      wheel: WHEEL,
-      canSpin: next === null || Date.now() >= next.getTime(),
+      wheel,
+      enabled,
+      canSpin: enabled && (next === null || Date.now() >= next.getTime()),
       lastSpinAt: user.lastBonusAt?.toISOString() ?? null,
       nextSpinAt: next?.toISOString() ?? null,
       vouchers: vouchers.map((v) => ({
@@ -109,6 +133,11 @@ export class BonusService {
    * rows means somebody else already took today's spin.
    */
   async spin(userId: string): Promise<SpinResult> {
+    const { wheel, cooldownMs } = await this.wheelConfig();
+    if (!this.settings.get<boolean>('bonus.enabled')) {
+      throw badRequest(ErrorCode.BONUS_DISABLED, 'The daily bonus is switched off');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({
         where: { id: userId },
@@ -119,7 +148,7 @@ export class BonusService {
         throw forbidden(ErrorCode.ACCOUNT_BANNED, user.banReason ?? 'Account is banned');
       }
 
-      const cutoff = new Date(Date.now() - BONUS_COOLDOWN_MS);
+      const cutoff = new Date(Date.now() - cooldownMs);
       const claimed = await tx.user.updateMany({
         where: { id: userId, OR: [{ lastBonusAt: null }, { lastBonusAt: { lte: cutoff } }] },
         data: { lastBonusAt: new Date() },
@@ -145,7 +174,7 @@ export class BonusService {
       if (!clientSeed) throw badRequest(ErrorCode.NO_ACTIVE_SEED, 'No active client seed');
 
       const roll = computeRoll(serverSeed.seed, clientSeed.seed, serverSeed.nonce);
-      const slice = pickWheelSlice(roll);
+      const slice = pickWheelSlice(roll, wheel);
 
       // A skin has to be picked before the row is written, because the row
       // records which one it was.
@@ -220,7 +249,7 @@ export class BonusService {
         nonce: serverSeed.nonce,
         serverSeedHash: serverSeed.seedHash,
         clientSeed: clientSeed.seed,
-        nextSpinAt: new Date(Date.now() + BONUS_COOLDOWN_MS).toISOString(),
+        nextSpinAt: new Date(Date.now() + cooldownMs).toISOString(),
         balance,
         item: grantedItem,
       };
@@ -319,7 +348,13 @@ export class BonusService {
     tx: Prisma.TransactionClient,
     ceiling: number,
     roll: number,
-  ): Promise<{ id: string; marketHashName: string; imageUrl: string | null; rarity: ItemRarity; price: number } | null> {
+  ): Promise<{
+    id: string;
+    marketHashName: string;
+    imageUrl: string | null;
+    rarity: ItemRarity;
+    price: number;
+  } | null> {
     const candidates = await tx.item.findMany({
       where: {
         isActive: true,

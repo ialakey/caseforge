@@ -3,6 +3,7 @@ import { PrismaService } from './prisma.service';
 import { MaintenanceService } from './maintenance.service';
 import { ConfigController } from './config.controller';
 import { FxService } from './fx.service';
+import { SettingsService } from './settings.service';
 
 /**
  * Global module: PrismaService is needed by nearly every module, and importing
@@ -11,7 +12,7 @@ import { FxService } from './fx.service';
 @Global()
 @Module({
   controllers: [ConfigController],
-  providers: [PrismaService, MaintenanceService, FxService],
-  exports: [PrismaService, FxService],
+  providers: [PrismaService, MaintenanceService, FxService, SettingsService],
+  exports: [PrismaService, FxService, SettingsService],
 })
 export class CommonModule {}
