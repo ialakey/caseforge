@@ -89,6 +89,7 @@ The key entities (full schema in `apps/api/prisma/schema.prisma`):
 - **InventoryItem** — an item on a user's account, with a state machine
 - **Transaction** — the ledger of every balance movement, the single source of truth about money
 - **Upgrade** — a staked upgrade: stake, target, chance, roll, outcome
+- **Contract** — several items traded for one: stake, solved outcome table, roll, reward
 - **Withdrawal** — a withdrawal request tied to a bot and a trade offer
 - **SteamBot** — a farm bot: status, inventory capacity, limits
 - **ServerSeed / ClientSeed** — provable fairness
@@ -218,6 +219,59 @@ swap), and a price gap wide enough to push the chance below 0.5%.
 
 ---
 
+## 6a. Contracts
+
+A contract takes between 3 and 10 items and returns exactly one. Unlike an
+upgrade there is no winning and losing branch: a contract always pays out, the
+only question is what. The reward is drawn from a pool of catalogue items priced
+between 0.1x and 5x the staked sum, and the outcome is the same roll a case
+opening uses, over the same seed pair and shared `nonce` counter.
+
+### How the outcome table is solved
+
+The pool is not weighted by hand. Hand-tuning it would make the contract a
+second economy sitting next to the cases with maths of its own, and every
+repricing of the catalogue would silently move the margin. Instead the weights
+are solved so that the expected reward equals `stakeValue × CONTRACT_RTP`, with
+the same RTP the cases and the upgrade run on.
+
+Weights follow an exponential tilt, `w_i ∝ exp(-alpha × u_i)`, where `u_i` is the
+outcome's price on a log scale normalised to `[0, 1]` across the pool. Alpha is
+found by bisection: the expected value falls monotonically in alpha — its
+derivative is minus the variance of the tilted distribution — so a single
+bracket converges. Alpha = 0 would be a uniform pool; a positive alpha leans on
+the cheap outcomes, which is where it lands, since the target sits below the
+middle of the band.
+
+The consequence worth stating: the margin is a constant of the system, not a
+property of the catalogue. Whatever items happen to be priced inside the band,
+the solver places the expected value on the same number.
+
+Fractional weights become whole tickets by largest remainder, so the ranges tile
+`[0, TICKET_SPACE - 1]` exactly — the same invariant `validateTicketRanges`
+enforces on a case. An outcome that would round down to zero tickets cannot be
+won, and drawing it on the reel would be a lie, so it is dropped and the pool
+re-solved over what is left.
+
+### What is stored
+
+The solved table is snapshotted onto the contract row as JSON, with each
+outcome's item id, price and ticket range. The pool is derived from a live
+catalogue, so it cannot be rebuilt later from prices that have since moved:
+without the snapshot the roll would still be reproducible but would no longer
+mean anything.
+
+The staked items are consumed regardless of the outcome, through the same
+conditional `updateMany` on `status = AVAILABLE` an upgrade uses — an item that
+has meanwhile gone to a sale or a withdrawal fails the claim and the contract
+does not happen.
+
+A contract is refused rather than played on bad odds when the catalogue is too
+thin inside the band, or when it holds nothing above the payout the table has to
+average to.
+
+---
+
 ## 7. Steam integration
 
 ### 7.1 Sign-in and profile
@@ -247,6 +301,72 @@ avatar.
 The key point: **Steam never returns an e-mail address** by either route. It will
 never be known unless the user types it in. Every account-recovery path is built
 around the Steam account.
+
+### 7.1a Sessions
+
+The JWT pair is short access token plus long refresh token: the access token
+carries the user id and role and is checked on every request without touching
+the database, so it has to expire quickly for a ban or a role change to take
+effect. The refresh token lives in an httpOnly cookie for a month and is the
+only thing that can mint a new one.
+
+That split only works if something spends the refresh token. The browser does it
+transparently: a 401 from any call triggers one refresh and one replay of the
+original request, and a failed refresh is what ends the session — not a normal
+15-minute expiry. Concurrent 401s share a single in-flight refresh, because a
+page load fires several calls at once and each starting its own refresh would
+rotate the cookie repeatedly, leaving the losers of the race replaying with a
+token that had already been superseded. That failure mode is indistinguishable,
+from the player's side, from being logged out at random.
+
+The websocket reads its token during the handshake only, so it takes the token
+through a callback and reconnects when the token changes; pinning it at page
+load would refuse every reconnect made after the first expiry.
+
+---
+
+## 7a. The inventory lifecycle
+
+An item on an account is a row with a status, and the row is never deleted:
+
+`AVAILABLE` → `SOLD` | `WITHDRAWN` | `LOCKED` | `UPGRADED` | `CONTRACTED`
+
+Only `AVAILABLE` can be acted on. `LOCKED` belongs to a withdrawal in flight;
+the other three are terminal and make up the history the interface shows on its
+own tab. Deleting the row instead would be smaller, and wrong twice over: a
+player who sold a knife still wants to see what they got for it, and support
+cannot investigate a complaint about an item that disappeared from the
+interface at the moment it was disposed of.
+
+Every transition is a conditional `updateMany` on `status = AVAILABLE`, which is
+both the check and the claim. An item that has meanwhile gone to a sale, a
+withdrawal or a contract simply falls out of the affected rows, and the mismatch
+between the affected count and the number of ids requested is what the caller
+rejects on. Nothing here relies on having read the row first.
+
+**Selling everything** resolves its own set inside the transaction from the
+filter the interface was showing, rather than from a list of ids the browser had
+loaded. Ids would cap the operation at the page the player happened to have
+open and would race with anything that changed in between; the filter cannot.
+The total comes back from the server for the same reason — the confirmation
+dialog can only ever quote an estimate of it.
+
+**Withdrawal from the inventory is a stub.** It marks the item `WITHDRAWN` and
+does nothing else: no bot, no trade offer, no queue. The real path — locking,
+BullMQ, the bot farm, the trade URL — is section 7.6 and is untouched by it. The
+stub is deliberately the only code that shortcuts it, so wiring the farm to the
+interface later is a deletion rather than an untangling.
+
+**Filters.** Two axes: the tab (available, withdrawing, history, all) and a price
+band. The band edges are fixed in the base currency rather than in whatever the
+player is displaying. A band that moved with the exchange rate would re-sort the
+inventory every time the rates refreshed, and an item could sit in one band on
+Monday and another on Tuesday without its price having changed at all. The
+labels are rendered through the usual money formatter, so the edges still read
+in the player's chosen currency — round in the base currency, converted
+elsewhere.
+
+---
 
 ### 7.2 The market: prices and images
 
@@ -450,9 +570,9 @@ fields already exist on `User`).
 
 - **Stage 1 (done).** Monorepo, docker-compose, database schema, Steam OpenID,
   provable fairness, case opening with animation and batch opening, upgrades,
-  inventory, drop feed, RU/EN localisation with a currency switch, a CRM with a
-  case builder and Steam price synchronisation.
+  contracts, inventory, drop feed, RU/EN localisation with a currency switch, a
+  CRM with a case builder and Steam price synchronisation.
 - **Stage 2.** The bot farm, real withdrawals, item deposits.
-- **Stage 3.** Case battles, contracts, promo codes, a referral system.
+- **Stage 3.** Case battles, promo codes, a referral system.
 - **Stage 4.** Payments, KYC, full CRM reporting.
 - **Stage 5.** Load testing, PgBouncer, replicas, tuning for the spike.

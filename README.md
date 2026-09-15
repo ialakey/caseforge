@@ -172,7 +172,10 @@ maintenance for an audience of a few people.
 - provable fairness: seed pairs, rotation with reveal, and re-verification **in
   the browser** by an independent Web Crypto implementation
 - case opening in a single transaction with an atomic debit and nonce reservation
-- site inventory and selling items back
+- site inventory: filters by state and price band, selling one item or
+  everything on screen at once behind a confirmation, and a withdrawal stub
+- nothing is ever deleted from the inventory — a sold, withdrawn or staked item
+  keeps its row and changes status, so the history stays readable
 - a live drop feed over Redis Pub/Sub, batched every 300 ms
 - withdrawal requests: item locking, a BullMQ queue, idempotency by request id
 - the bot worker: bot login, an inventory mirror, trade offers, hold checks, status polling
@@ -183,7 +186,7 @@ maintenance for an audience of a few people.
 ## What is not there yet
 
 Stage 1 of the roadmap (section 14 of the architecture document). Not
-implemented: payments, item deposits, case battles, contracts, promo codes, KYC.
+implemented: payments, item deposits, case battles, promo codes, KYC.
 
 ---
 
@@ -208,6 +211,11 @@ What actually needs filling in before a production run:
 After signing in, the header shows the Steam avatar and nickname; the profile
 page adds a card with the SteamID and a link to the Steam profile, a trade URL
 field and the history.
+
+The session survives the access token. The token is short-lived on purpose, and
+the browser renews it against the refresh cookie the moment a call comes back
+401, retrying the original request once. A player who leaves a tab open over
+lunch comes back signed in; only a refresh that itself fails ends the session.
 
 The trade URL is checked against the account: `partner` in it is the low 32 bits
 of the SteamID64, and somebody else's link is rejected before a withdrawal could
