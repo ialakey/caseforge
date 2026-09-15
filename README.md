@@ -173,6 +173,10 @@ maintenance for an audience of a few people.
   expected payout is the same 90% the cases run on
 - **a daily bonus wheel**: one spin a day for money, a discount, a free opening
   or a skin, rolled from the same seed pair as everything else
+- **promo codes on a top-up**: percentage or flat, with per-code and per-player
+  limits, created in the back office
+- **runtime settings**: limits, fees, the top-up bounds and the wheel itself are
+  edited in the panel and take effect without a deploy
 - provable fairness: seed pairs, rotation with reveal, and re-verification **in
   the browser** by an independent Web Crypto implementation
 - case opening in a single transaction with an atomic debit and nonce reservation
@@ -342,6 +346,46 @@ so a reward never disappears without explanation.
 
 ---
 
+## Promo codes
+
+Created in the back office at `/admin/promo`. A code is a percentage of the
+top-up or a flat credit, with an optional minimum top-up, a cap on the bonus, a
+total number of uses and a per-player limit.
+
+A code **adds to** the top-up rather than discounting it. That matters once a
+real payment provider is behind the button: the sum charged has to be the sum
+the provider was told about, and a code that changed it would put the two out of
+step. Adding on top keeps the whole promotion on our side of the transaction.
+
+The bonus is its own ledger row rather than being folded into the deposit. What
+the player paid and what the promotion gave them are different kinds of money,
+and a report that cannot tell them apart cannot measure what the promotion cost.
+
+Limits are enforced with a conditional `UPDATE` on the counter rather than by
+counting rows and then writing: between a count and an insert, two top-ups fired
+together both see the last use available and both take it.
+
+---
+
+## Runtime settings
+
+`/admin/settings`. Maintenance mode, the top-up bounds, the sell-back fee, the
+opening rate limit, the wheel's cooldown and the wheel's own slices are stored in
+the database and read at request time, so changing one is a save rather than a
+deploy.
+
+The form is generated from a registry declared once in
+`packages/shared/src/settings.ts` — each setting names its group, its type, its
+bounds and its default. Adding a knob is a line in that file; the admin panel
+picks it up with no change of its own.
+
+**What is deliberately not configurable:** the ticket space, the seed algorithm
+and the shape of a roll. Those are not tuning parameters but the terms of a
+promise — every past opening was published against them, and an operator able to
+edit them could make yesterday's drops stop verifying.
+
+---
+
 ## Working with cases in the CRM
 
 `/admin/cases` lists the cases with their RTP and margin; `/admin/cases/new`
@@ -412,6 +456,7 @@ apps/
     src/upgrade/             upgrade: odds, roll, stake consumption
     src/contracts/           contracts: solved outcome table, roll, reward
     src/bonus/               the daily wheel: cooldown, roll, vouchers
+    src/promo/               promo codes: rules, preview, redemption
     src/inventory/           inventory: filters, selling, the withdrawal stub
     src/drops/               batched WebSocket feed
     src/withdrawals/         withdrawal requests and queueing
@@ -440,6 +485,8 @@ packages/
     src/upgrade.ts           upgrade odds and bounds
     src/contract.ts          contract reward table: the tilt and its solver
     src/bonus.ts             the wheel: slices, ticket ranges, cooldown
+    src/promo.ts             promo code rules and what one is worth
+    src/settings.ts          the settings registry: types, bounds, defaults
     src/inventory.ts         inventory statuses, filters and price bands
     src/steam-market.ts      market response parsing: prices, rarity, images
     src/provably-fair.ts     server-side cryptography (node:crypto)

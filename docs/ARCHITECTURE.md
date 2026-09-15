@@ -91,6 +91,8 @@ The key entities (full schema in `apps/api/prisma/schema.prisma`):
 - **Upgrade** — a staked upgrade: stake, target, chance, roll, outcome
 - **Contract** — several items traded for one: stake, solved outcome table, roll, reward
 - **DailyBonus** — one spin of the wheel: slice, roll, and whether it is still unspent
+- **PromoCode / PromoRedemption** — a top-up promotion and each use of it
+- **Setting** — a runtime setting, keyed by the shared registry
 - **Withdrawal** — a withdrawal request tied to a bot and a trade offer
 - **SteamBot** — a farm bot: status, inventory capacity, limits
 - **ServerSeed / ClientSeed** — provable fairness
@@ -580,6 +582,64 @@ before/after snapshot, and none of them changes a balance outside `Transaction`.
 
 The panel is English only. Translating an internal tool doubles the maintenance for
 an audience of a few people.
+
+---
+
+## 11a. Runtime settings
+
+Everything an operator can change without a deploy is declared once, in
+`packages/shared/src/settings.ts`, with its group, its type, its bounds and its
+default. The admin panel renders its form from that registry rather than from a
+field written per setting, so adding a knob is a line in one file and nothing
+else. The alternative — a bespoke form control, a validator and a reader per
+setting — is three places to keep in step and the reason most back offices end
+up with settings that exist in the database and nowhere in the interface.
+
+Values are cached in the API for fifteen seconds. The settings are read on
+nearly every request — the rate limit, the sell fee, the wheel — and a query
+apiece for data that changes a few times a month is pure waste. A write updates
+the writing instance at once, so an operator sees their change take hold while
+they are still looking at the panel; other instances pick it up within the TTL.
+
+A stored value that fails to parse reverts to its default and is logged rather
+than throwing. The panel validates on the way in, which is where a bad value
+should be rejected loudly; by the time it is being read, refusing to serve the
+site is not an improvement on serving it with a default.
+
+### What is deliberately not configurable
+
+`TICKET_SPACE`, the seed algorithm and the shape of a roll. These are not tuning
+parameters but the terms of a promise: every past opening was published against
+them, and they are what a player recomputes when they check one. An operator who
+could edit them could make yesterday's drops stop verifying — which is not a
+setting but a way of breaking the only claim the site makes.
+
+The case ticket ranges are the same kind of thing and are edited where they
+belong, in the case builder, through validation that refuses a case whose ranges
+do not tile the space.
+
+---
+
+## 11b. Promo codes
+
+A code adds to a top-up rather than discounting it. Once a real payment provider
+sits behind the button the charged sum has to match the sum the provider was told
+about, and a code that changed it would put the two out of step; adding on top
+keeps the promotion entirely on our side of the transaction.
+
+The credit is a second ledger row rather than a larger deposit row. What the
+player paid and what the promotion gave them are different kinds of money, and a
+report that cannot separate them cannot say what the promotion cost.
+
+Two limits, enforced differently because they race differently. The per-player
+limit is a count of redemption rows inside the deposit's transaction. The global
+limit is a conditional `UPDATE` on a denormalised counter: counting rows and then
+inserting lets two top-ups fired together both see the last use available and
+both take it. The rows remain the source of truth; the counter exists so the cap
+can be claimed in one statement.
+
+Codes are deactivated, never deleted. The redemptions point at them, and a player
+asking why their balance moved deserves a row that still explains it.
 
 ---
 
