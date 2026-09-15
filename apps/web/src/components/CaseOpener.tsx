@@ -7,6 +7,7 @@ import {
   translateError,
   type CaseView,
   type OpenCaseBatchResult,
+  type TranslationKey,
 } from '@caseforge/shared';
 import { api, ApiError, loginUrl } from '../lib/api';
 import { useAuth } from '../lib/store';
@@ -121,7 +122,18 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
         )}
 
         {batch && !spinning && (
-          <div className="mt-6">
+          <div className="mt-6 space-y-3">
+            {/* A voucher is spent silently by the server, so the interface has
+                to say so — otherwise the player finds a reward missing from the
+                bonus page and nothing to explain where it went. */}
+            {batch.bonusApplied && (
+              <p className="rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-center text-sm text-accent">
+                {t('bonus.applied', {
+                  prize: bonusLabel(batch.bonusApplied, money, t),
+                  saving: money(batch.bonusApplied.saving),
+                })}
+              </p>
+            )}
             <DropResults openings={batch.openings} spent={batch.totalSpent} />
           </div>
         )}
@@ -209,4 +221,24 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
       </section>
     </div>
   );
+}
+
+/** Names a spent voucher, matching how the bonus page labels the same prize. */
+function bonusLabel(
+  applied: { kind: string; value: number },
+  money: (v: number) => string,
+  t: (key: TranslationKey, params?: Record<string, string | number>) => string,
+): string {
+  switch (applied.kind) {
+    case 'BALANCE':
+      return t('bonus.prizeBalance', { amount: money(applied.value) });
+    case 'DISCOUNT':
+      return t('bonus.prizeDiscount', { percent: applied.value / 100 });
+    case 'FREE_CASE':
+      return t('bonus.prizeFreeCase', { max: money(applied.value) });
+    case 'FREE_ITEM':
+      return t('bonus.prizeFreeItem', { max: money(applied.value) });
+    default:
+      return applied.kind;
+  }
 }

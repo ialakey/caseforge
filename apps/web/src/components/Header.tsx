@@ -69,6 +69,7 @@ export function Header() {
             <NavLink href="/">{t('nav.cases')}</NavLink>
             <NavLink href="/upgrade">{t('nav.upgrade')}</NavLink>
             <NavLink href="/contract">{t('nav.contract')}</NavLink>
+            <NavLink href="/bonus">{t('nav.bonus')}</NavLink>
             {isStaff && <NavLink href="/admin">{t('nav.crm')}</NavLink>}
           </nav>
 
