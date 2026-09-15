@@ -18,6 +18,14 @@ const WINNER_INDEX = 52;
 export const SPIN_MS = 5200;
 const STAGGER_MS = 260;
 
+/**
+ * How long to wait for an animation frame before starting the travel anyway.
+ *
+ * Generous next to the single frame a visible tab needs, and small next to
+ * SPIN_MS, so it never shortens a spin the player is actually watching.
+ */
+const START_FALLBACK_MS = 250;
+
 export type Orientation = 'horizontal' | 'vertical';
 
 interface RouletteProps {
@@ -89,18 +97,42 @@ export function Roulette({
     setAnimating(false);
     setOffset(0);
 
+    // Whichever of the two paths below gets there first starts the travel; the
+    // other then does nothing.
+    let started = false;
+    const start = (): void => {
+      if (started) return;
+      started = true;
+      setAnimating(true);
+      setOffset(target);
+    };
+
     // Two frames: the first hands the browser the reset position with no
     // transition, the second sets the target with one. In a single frame the
     // browser would coalesce both styles and there would be no scroll at all.
     let innerRaf = 0;
     const outerRaf = requestAnimationFrame(() => {
-      innerRaf = requestAnimationFrame(() => {
-        setAnimating(true);
-        setOffset(target);
-      });
+      innerRaf = requestAnimationFrame(start);
     });
 
+    // A background tab never runs an animation frame, but it does still run
+    // timers — and the landing below is a timer. Without this fallback a spin
+    // begun in a hidden tab would never leave its reset position, yet would
+    // still be flagged as landed on schedule: the player would come back to a
+    // reel lit up as finished with the marker pointing at nothing. The delay is
+    // far longer than the frame the visible case needs, so on screen this timer
+    // only ever arrives second and start() ignores it.
+    const startFallback = setTimeout(start, START_FALLBACK_MS);
+
     const timer = setTimeout(() => {
+      // Commit the final position rather than trusting the transition to have
+      // carried the strip there. A background tab stalls the transition even
+      // once the transform is set — it can sit at the start indefinitely — so
+      // the landing, which is a timer and therefore always runs, puts the strip
+      // where the roll says it belongs. On screen this changes nothing: the
+      // easing is flat at its end, so by now the strip is already there.
+      setAnimating(false);
+      setOffset(target);
       setLanded(true);
       onFinish?.();
     }, duration);
@@ -108,6 +140,7 @@ export function Roulette({
     return () => {
       cancelAnimationFrame(outerRaf);
       cancelAnimationFrame(innerRaf);
+      clearTimeout(startFallback);
       clearTimeout(timer);
     };
     // onFinish is deliberately out of the deps: a fresh callback reference on
@@ -122,7 +155,7 @@ export function Roulette({
   return (
     <div
       ref={viewportRef}
-      className="relative overflow-hidden rounded-lg border bg-neutral-950 transition-all duration-500"
+      className="relative overflow-hidden rounded-lg border bg-surface-base transition-all duration-500"
       style={{
         height: horizontal ? 168 : 320,
         borderColor: landed ? winnerColor : '#262626',
@@ -132,7 +165,7 @@ export function Roulette({
       {/* Marker: a line across the strip with arrows at the edges */}
       {horizontal ? (
         <>
-          <div className="pointer-events-none absolute inset-y-0 left-1/2 z-20 -ml-px w-0.5 bg-amber-400" />
+          <div className="pointer-events-none absolute inset-y-0 left-1/2 z-20 -ml-px w-0.5 bg-accent" />
           <Arrow className="left-1/2 top-0 -ml-1.5" direction="down" />
           <Arrow className="bottom-0 left-1/2 -ml-1.5" direction="up" />
           <Fade className="inset-y-0 left-0 w-24 bg-gradient-to-r" />
@@ -140,7 +173,7 @@ export function Roulette({
         </>
       ) : (
         <>
-          <div className="pointer-events-none absolute inset-x-0 top-1/2 z-20 -mt-px h-0.5 bg-amber-400" />
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 z-20 -mt-px h-0.5 bg-accent" />
           <Fade className="inset-x-0 top-0 h-16 bg-gradient-to-b" />
           <Fade className="inset-x-0 bottom-0 h-16 bg-gradient-to-t" />
         </>
@@ -169,7 +202,7 @@ export function Roulette({
           return (
             <div
               key={`${spinId}-${i}`}
-              className="flex shrink-0 flex-col items-center justify-center rounded bg-neutral-900 transition-all duration-500"
+              className="flex shrink-0 flex-col items-center justify-center rounded bg-surface-raised transition-all duration-500"
               style={{
                 width: horizontal ? H_TILE : '86%',
                 height: horizontal ? 140 : V_TILE,
@@ -198,7 +231,7 @@ export function Roulette({
                  */
                 loading="eager"
               />
-              <div className="w-full truncate px-2 text-center text-[10px] text-neutral-400">
+              <div className="w-full truncate px-2 text-center text-[10px] text-ink-muted">
                 {item.marketHashName}
               </div>
             </div>
@@ -217,13 +250,19 @@ function Arrow({ className, direction }: { className: string; direction: 'up' | 
   return (
     <div
       className={`pointer-events-none absolute z-20 h-0 w-0 ${className}`}
-      style={{ borderLeft: '7px solid transparent', borderRight: '7px solid transparent', ...border }}
+      style={{
+        borderLeft: '7px solid transparent',
+        borderRight: '7px solid transparent',
+        ...border,
+      }}
     />
   );
 }
 
 function Fade({ className }: { className: string }) {
   return (
-    <div className={`pointer-events-none absolute z-10 from-neutral-950 to-transparent ${className}`} />
+    <div
+      className={`pointer-events-none absolute z-10 from-neutral-950 to-transparent ${className}`}
+    />
   );
 }
