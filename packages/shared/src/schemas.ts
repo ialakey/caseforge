@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { CONTRACT_MAX_ITEMS, CONTRACT_MIN_ITEMS } from './contract.ts';
+import { INVENTORY_FILTERS, PRICE_BAND_KEYS } from './inventory.ts';
 
 /**
  * The only valid trade URL shape. Steam issues it on the inventory privacy
@@ -7,10 +9,7 @@ import { z } from 'zod';
 export const TRADE_URL_REGEX =
   /^https:\/\/steamcommunity\.com\/tradeoffer\/new\/\?partner=(\d+)&token=([A-Za-z0-9_-]{8})$/;
 
-export const tradeUrlSchema = z
-  .string()
-  .trim()
-  .regex(TRADE_URL_REGEX, 'Invalid Steam trade URL');
+export const tradeUrlSchema = z.string().trim().regex(TRADE_URL_REGEX, 'Invalid Steam trade URL');
 
 export function parseTradeUrl(url: string): { partner: string; token: string } | null {
   const m = TRADE_URL_REGEX.exec(url.trim());
@@ -35,11 +34,65 @@ export const upgradeTargetsSchema = z.object({
   perPage: z.coerce.number().int().min(1).max(60).default(24),
 });
 
+/**
+ * A contract stake. The bounds come from the contract module rather than being
+ * repeated here, so the API and the maths cannot disagree about what a legal
+ * contract is.
+ */
+export const contractSchema = z.object({
+  inventoryItemIds: z
+    .array(z.string().uuid())
+    .min(CONTRACT_MIN_ITEMS)
+    .max(CONTRACT_MAX_ITEMS)
+    // The ids address rows that are consumed, so a repeated id is not a
+    // harmless duplicate but an attempt to stake one item twice.
+    .refine((ids) => new Set(ids).size === ids.length, 'an item cannot be staked twice'),
+});
+
+/** Preview of the outcome table, before anything is consumed. */
+export const contractPreviewSchema = z.object({
+  inventoryItemIds: z
+    .union([z.string(), z.array(z.string())])
+    // A query string carries one value as a bare string and several as an
+    // array; normalise before validating so both shapes reach the same rule.
+    .transform((v) => (Array.isArray(v) ? v : v.split(',')))
+    .pipe(
+      z
+        .array(z.string().uuid())
+        .min(CONTRACT_MIN_ITEMS)
+        .max(CONTRACT_MAX_ITEMS)
+        .refine((ids) => new Set(ids).size === ids.length, 'an item cannot be staked twice'),
+    ),
+});
+
 export const setClientSeedSchema = z.object({
   clientSeed: z.string().trim().min(1).max(64),
 });
 
 export const sellItemsSchema = z.object({
+  inventoryItemIds: z.array(z.string().uuid()).min(1).max(100),
+});
+
+/** Which slice of the inventory to return. */
+export const inventoryQuerySchema = z.object({
+  filter: z.enum(INVENTORY_FILTERS).default('all'),
+  band: z.enum(PRICE_BAND_KEYS).default('all'),
+});
+
+/**
+ * Selling everything.
+ *
+ * The filter travels with the request rather than a list of ids: the player
+ * pressed the button under a filtered view and means "everything I am looking
+ * at". Sending ids instead would cap the operation at the page they had loaded
+ * and would race with anything that changed in between.
+ */
+export const sellAllSchema = z.object({
+  band: z.enum(PRICE_BAND_KEYS).default('all'),
+});
+
+/** Withdrawing straight from the inventory. */
+export const withdrawItemsSchema = z.object({
   inventoryItemIds: z.array(z.string().uuid()).min(1).max(100),
 });
 
@@ -91,7 +144,10 @@ export const steamSearchSchema = z.object({
 
 export const adjustBalanceSchema = z.object({
   userId: z.string().uuid(),
-  amount: z.number().int().refine((v) => v !== 0, 'amount must not be zero'),
+  amount: z
+    .number()
+    .int()
+    .refine((v) => v !== 0, 'amount must not be zero'),
   reason: z.string().trim().min(3).max(500),
 });
 

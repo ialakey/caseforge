@@ -8,6 +8,8 @@ export * from './balancing.ts';
 export * from './steam-market.ts';
 export * from './steam-profile.ts';
 export * from './upgrade.ts';
+export * from './contract.ts';
+export * from './inventory.ts';
 export * from './money.ts';
 export * from './types.ts';
 export * from './schemas.ts';
