@@ -48,6 +48,6 @@ or roles.
 ## Scope
 
 The roadmap lives in section 14 of [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-Payments, item deposits, case battles, contracts, promo codes and KYC are all
-unimplemented on purpose — if you want to take one on, open an issue first so
-the design can be agreed before the code.
+Payments, item deposits, case battles and KYC are all unimplemented on purpose
+— if you want to take one on, open an issue first so the design can be agreed
+before the code.
