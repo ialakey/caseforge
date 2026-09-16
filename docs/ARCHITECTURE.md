@@ -54,7 +54,7 @@ a bridge between them.
 ```
 apps/web           Next.js 15 (App Router), React 19, Tailwind, Zustand, socket.io-client
 apps/api           NestJS 11 on Fastify, Prisma 6, Postgres 16, Redis 7, BullMQ, socket.io
-apps/bot           Node worker: the Steam bot farm, consumer of the withdrawal queue
+apps/bot           Node worker: consumer of the withdrawal queue — market purchases and the Steam bot farm
 packages/shared    shared types, zod schemas, translations, provable fairness (used by both API and front end)
 ```
 
@@ -93,7 +93,10 @@ The key entities (full schema in `apps/api/prisma/schema.prisma`):
 - **DailyBonus** — one spin of the wheel: slice, roll, and whether it is still unspent
 - **PromoCode / PromoRedemption** — a top-up promotion and each use of it
 - **Setting** — a runtime setting, keyed by the shared registry
-- **Withdrawal** — a withdrawal request tied to a bot and a trade offer
+- **Withdrawal** — a withdrawal request, carrying the channel that fills it
+- **WithdrawalItem** — one line of a request: what it asked for, recorded once
+- **MarketAccount** — one market.csgo.com key the site buys through
+- **MarketPurchase** — one skin bought on market.csgo.com for one withdrawn item
 - **SteamBot** — a farm bot: status, inventory capacity, limits
 - **ServerSeed / ClientSeed** — provable fairness
 - **AuditLog** — every operator action
@@ -412,11 +415,12 @@ open and would race with anything that changed in between; the filter cannot.
 The total comes back from the server for the same reason — the confirmation
 dialog can only ever quote an estimate of it.
 
-**Withdrawal from the inventory is a stub.** It marks the item `WITHDRAWN` and
-does nothing else: no bot, no trade offer, no queue. The real path — locking,
-BullMQ, the bot farm, the trade URL — is section 7.6 and is untouched by it. The
-stub is deliberately the only code that shortcuts it, so wiring the farm to the
-interface later is a deletion rather than an untangling.
+**Withdrawing from the inventory starts a purchase.** The item goes to `LOCKED`
+and a request is queued; it becomes `WITHDRAWN` only when the market confirms
+that a seller handed the skin over, and returns to `AVAILABLE` if the purchase
+fails. The interface therefore cannot say "withdrawn" at the moment of the
+press — it says a request was made, which is the only thing that is true yet.
+The mechanism is section 7.6.
 
 **Filters.** Two axes: the tab (available, withdrawing, history, all) and a price
 band. The band edges are fixed in the base currency rather than in whatever the
@@ -473,7 +477,49 @@ is exactly how a site ends up selling items below cost after a currency move.
 The user pastes their trade URL; `partner` and `token` are parsed out of it. It is
 validated by shape, and in practice by the first offer that uses it.
 
-### 7.5 The bot farm
+### 7.5 Delivery channels
+
+Two, chosen by the `withdrawals.provider` setting and **stamped on the request
+when it is created**. Reading the setting again at processing time would mean an
+operator flipping the switch could leave requests half-filled by one channel and
+polled by the other.
+
+**MARKET** (the default). The site holds no inventory. Each withdrawn item is
+bought on market.csgo.com, and the buying account names the player's
+`partner`/`token` as the recipient so the seller delivers directly. What the site
+carries is a price rather than a warehouse: no capital tied up in skins, no slot
+ceiling, and nothing that cannot be handed out because no bot happens to own it.
+
+There is a pool of accounts rather than one, and the reason is the rate limit:
+the market **deletes** an API key that exceeds five requests a second. That is
+not a throttle to back off from — it is the key ceasing to exist, taking with it
+the ability to ask about any purchase it made. So the client stays well under
+the limit, which caps a key at about four requests a second, and a single
+withdrawal costs a search, a buy and a poll every few seconds until the seller
+delivers. Extra keys raise the ceiling because the limit is counted per key, so
+each account gets its own client with its own queue — one shared queue would
+throttle them collectively and give back exactly the ceiling the second key was
+bought to remove.
+
+Accounts are not interchangeable after the fact, which is the part that shapes
+the code. `get-buy-info-by-custom-id` answers for the key that made the purchase
+and reports every other purchase as unknown, and the money came out of that
+account's balance. So a purchase is bound to its account **before** `buy-for` is
+called, polling is grouped by account, and a retry goes back to the key that
+made the first attempt. Asking a different key would get a truthful "never heard
+of it" about a purchase that had been paid for — and the retry would then buy
+the skin a second time.
+
+Keys are encrypted under `BOT_SECRETS_KEY` and decrypted only in the worker, the
+same as the Steam bots' secrets. The back office never holds one: the worker
+writes balance and health snapshots, and the panel reads those.
+
+**BOTS** (section 7.5.1). A farm of Steam accounts holding the inventory. Kept
+because an operator already running one should not be forced to migrate, and
+because an account with its own inventory is the only way to deliver something
+the market is not selling.
+
+#### 7.5.1 The bot farm
 
 One bot is one Steam account with the mobile authenticator enabled and with
 `shared_secret`/`identity_secret` available (needed to auto-confirm offers). The
@@ -491,18 +537,49 @@ environment key in development.
 ### 7.6 Withdrawing an item
 
 ```
-request → validation (trade URL, hold, limits, anti-fraud)
-        → BullMQ withdrawals queue
-        → pick a bot that holds the item and has free slots
-        → create the trade offer
-        → auto-confirm via identity_secret
-        → poll the offer status
-        → accepted / declined / expired → update InventoryItem
+request → validation (trade URL, limits, anti-fraud)
+        → items → LOCKED, one Withdrawal row, one BullMQ job
+        → MARKET: one MarketPurchase per item
+             search-item-by-hash-name → buy-for(partner, token, price ceiling)
+             poll get-list-buy-info-by-custom-id → stage 2 or 5
+        → BOTS:   pick a bot holding every item → offer → auto-confirm → poll
+        → delivered → WITHDRAWN, failed → back to AVAILABLE
 ```
 
-The whole chain is idempotent by `withdrawalId`: re-running the job does not create
-a second offer. That is critical — a queue retry without idempotency means handing
-out the item twice.
+**Idempotency.** On the bot channel the job is idempotent by `withdrawalId`: a
+retry does not create a second offer. On the market channel that is not enough,
+because the unit of money is the purchase, not the request. Each `MarketPurchase`
+row is unique on its inventory item and travels as the market's `custom_id`, so a
+retry after a lost reply first asks the market what happened to that id. Without
+it, a dropped connection between the charge and the response buys the skin twice
+and pays for both.
+
+**A request is no longer atomic.** Three items are three sellers, each able to
+fail alone, so the request's status is *computed* from its lines every time a
+purchase moves — hence `PARTIAL`. The lines are a table of their own rather than
+`InventoryItem.withdrawalId`, because that column says which request holds an
+item *now* and is cleared on a refund: reading history from it would make a
+request that gave everything back list nothing at all, and one that refunded a
+single item report itself `COMPLETED`. The rule the computation enforces is one-directional:
+an item returns to the player's inventory only when the purchase for it is known
+not to have happened. A purchase that is merely unfinished keeps its item locked,
+and a purchase that was paid for is never written off on a timer. The money is
+already gone and the seller may still deliver; the site says so to an operator
+rather than guessing, and the guess that would be cheap to make — refund the item
+— is exactly the one that hands out a skin twice.
+
+**Price.** The ceiling per item is `max(current catalogue price, credited price)`
+raised by `withdrawals.market.maxOverpayBps`. The current price rather than the
+credited one because the player owns an item, not an amount, and a skin that has
+doubled must still be withdrawable; the credited price as a floor so an item an
+operator has marked down does not become impossible to take out. Past the ceiling
+the purchase is refused and the item comes back — a refusal, not a loss.
+
+**Units.** The market quotes roubles in kopecks but dollars and euros in
+thousandths, and reports balances and amounts paid as floats in whole units. All
+three conversions live in one module with tests, and an account whose currency
+differs from the settlement currency is refused rather than converted through the
+display rate (see 7.3).
 
 ---
 
@@ -573,6 +650,9 @@ A separate section of the application behind role-based access (`ADMIN`, `SUPPOR
 - **Items** — the catalogue, prices, manual price overrides
 - **Users** — balance, history, manual balance adjustment (always through `Transaction` + `AuditLog`), bans
 - **Withdrawals** — the request queue, manual intervention, re-sending an offer
+- **Market** — the buying account's balance and checks, purchase counts, what
+  delivery has cost against what was authorised, and purchases paid for but not
+  delivered. Read-only: the worker is the only thing that spends money
 - **Bots** — farm status, inventories, login errors, holds
 - **Reports** — exports by period, cohorts, top players
 - **Settings** — feature flags, limits, copy, promo codes

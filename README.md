@@ -3,7 +3,7 @@
 <p align="center">
   <b>An open-source CS2 case-opening platform.</b><br>
   Steam sign-in, provable fairness, an RTP-balanced case builder,<br>
-  item withdrawal through a farm of Steam bots and an admin CRM.
+  item withdrawal bought on market.csgo.com and an admin CRM.
 </p>
 
 <p align="center">
@@ -18,7 +18,8 @@
 
 Every piece of the loop is here and working: a player signs in with Steam, opens
 a case, watches the reel stop on a real item, sells it back or upgrades it, and
-requests a withdrawal that a Steam bot actually delivers. The odds are provably
+requests a withdrawal that is bought on market.csgo.com and delivered to their
+trade link by the seller. The odds are provably
 fair and re-verifiable in the browser, item prices come from the Steam market,
 and the back office computes margin per case before it goes live.
 
@@ -50,7 +51,7 @@ The stack and the architectural decisions are covered in
 |---|---|
 | `apps/web` | Next.js 15 (App Router), React 19, Tailwind, Zustand, socket.io-client |
 | `apps/api` | NestJS 11 on Fastify, Prisma 6, Postgres 16, Redis 7, BullMQ, socket.io |
-| `apps/bot` | Node worker: the Steam bot farm and the withdrawal queue consumer |
+| `apps/bot` | Node worker: the withdrawal queue consumer — market purchases, and the Steam bot farm |
 | `packages/shared` | shared types, zod schemas, translations, ticket logic and provable fairness |
 
 Why TypeScript, and why the trading layer has to run on Node, is covered in
@@ -177,16 +178,23 @@ maintenance for an audience of a few people.
   limits, created in the back office
 - **runtime settings**: limits, fees, the top-up bounds and the wheel itself are
   edited in the panel and take effect without a deploy
+- the whole interface, **back office included**, switches between Russian and
+  English from the header — settings labels and the RTP verdict along with it
 - provable fairness: seed pairs, rotation with reveal, and re-verification **in
   the browser** by an independent Web Crypto implementation
 - case opening in a single transaction with an atomic debit and nonce reservation
 - site inventory: filters by state and price band, selling one item or
-  everything on screen at once behind a confirmation, and a withdrawal stub
+  everything on screen at once behind a confirmation, and withdrawal
 - nothing is ever deleted from the inventory — a sold, withdrawn or staked item
   keeps its row and changes status, so the history stays readable
 - a live drop feed over Redis Pub/Sub, batched every 300 ms
 - withdrawal requests: item locking, a BullMQ queue, idempotency by request id
-- the bot worker: bot login, an inventory mirror, trade offers, hold checks, status polling
+- **withdrawal through market.csgo.com**: a pool of accounts buys each skin and
+  the seller delivers it to the player, with an operator-set price ceiling, an
+  idempotency key that survives a lost reply, per-item delivery tracking, and
+  per-key throttling so the market's rate limit cannot cost you a key
+- the bot farm, still available as the alternative channel: bot login, an
+  inventory mirror, trade offers, hold checks, status polling
 - CRM: a GGR dashboard, per-case margin, a case builder with range validation and
   RTP calculation, balance adjustments through the ledger, an audit log
 - nightly reconciliation of balances against the transaction ledger
@@ -194,7 +202,7 @@ maintenance for an audience of a few people.
 ## What is not there yet
 
 Stage 1 of the roadmap (section 14 of the architecture document). Not
-implemented: payments, item deposits, case battles, promo codes, KYC.
+implemented: payments, item deposits, case battles, KYC.
 
 ---
 
@@ -208,7 +216,7 @@ What actually needs filling in before a production run:
 |---|---|
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | `openssl rand -hex 32` each |
 | `STEAM_API_KEY` | https://steamcommunity.com/dev/apikey. Without it the profile falls back to the public XML; sign-in works either way |
-| `BOT_SECRETS_KEY` | `openssl rand -hex 32`, exactly 64 hex characters. Encryption key for bot secrets |
+| `BOT_SECRETS_KEY` | `openssl rand -hex 32`, exactly 64 hex characters. Encrypts both the market API keys and the Steam bot secrets |
 | `BOOTSTRAP_ADMIN_STEAM_ID` | your SteamID64: that account gets the ADMIN role on first sign-in |
 | `ENABLE_STUB_DEPOSITS` | `true`/`false`. The stub top-up. On by default in development, **off in production**, enabled only by an explicit `true` |
 
@@ -251,9 +259,11 @@ bands narrow it further.
   <em>The same inventory on its history tab: sold, withdrawn and staked items keep their row and carry the status that explains where they went.</em>
 </p>
 
-**Withdrawal from the inventory is a stub.** It marks the item withdrawn and does
-nothing else — no bot, no trade offer, no queue. The real path is the withdrawals
-module described further down, and it is untouched by it.
+**Withdrawal is real.** Pressing it locks the item and queues a request; the
+worker buys that exact skin on market.csgo.com and the seller sends it to the
+player's trade link. The item stays on record as `LOCKED` until the market
+confirms delivery, and goes back to `AVAILABLE` if the purchase fails. See
+[Withdrawal](#withdrawal) below.
 
 **Top-up is a stub.** The button credits the entered amount with no payment at
 all. It exists so the gameplay loop can be exercised before a payment provider
@@ -386,9 +396,10 @@ together both see the last use available and both take it.
 ## Runtime settings
 
 `/admin/settings`. Maintenance mode, the top-up bounds, the sell-back fee, the
-opening rate limit, the wheel's cooldown and the wheel's own slices are stored in
-the database and read at request time, so changing one is a save rather than a
-deploy.
+opening rate limit, the wheel's cooldown and slices, and the whole withdrawal
+policy — which channel delivers, how far above the credited price a purchase may
+go, the minimum seller delivery rate — are stored in the database and read at
+request time, so changing one is a save rather than a deploy.
 
 <p align="center">
   <img src="docs/screenshots/en/admin-settings.png" alt="The settings page of the back office, grouped by area" width="900">
@@ -445,7 +456,73 @@ the item, and neither the price nor the image will resolve.
 
 ---
 
+## Withdrawal
+
+The site holds no skins of its own. A withdrawal is a purchase: a market.csgo.com
+account buys the exact item the player is taking out and names their trade link
+as the recipient, so the seller delivers it directly. This is
+how most case sites work now, and the reason is arithmetic rather than fashion —
+a bot farm has to hold every skin it might ever hand out, funded up front and
+capped at 1000 slots per account, and it still fails the moment somebody wins
+something no bot owns.
+
+```
+player presses Withdraw
+  -> items -> LOCKED, one Withdrawal row, one BullMQ job         (api)
+  -> per item: search-item-by-hash-name, then buy-for with the
+     player's partner/token and a price ceiling                  (worker)
+  -> poll get-list-buy-info-by-custom-id until stage 2 or 5      (worker)
+  -> delivered -> WITHDRAWN, cancelled -> back to AVAILABLE
+```
+
+What the design is actually about:
+
+- **Never paying twice.** Each purchase row's own id travels as the market's
+  `custom_id`, and the row is unique on the inventory item. A job that dies
+  between the account being charged and the reply arriving is resolved by asking
+  the market about that id, not by buying again — and asking the *same account*,
+  since a key only answers for its own purchases.
+- **More than one account.** The market deletes a key that exceeds five requests
+  a second, so one key caps how fast the whole site can hand items out. Each
+  account is throttled on its own, purchases go to the least recently used one
+  that can afford them, and every purchase is bound to its account before the
+  money moves.
+- **Never refunding an item that is on its way.** An item returns to the
+  inventory only when the purchase for it is known not to have happened. A
+  purchase that is merely unfinished keeps its item locked, and one that was
+  paid for is never written off on a timer — it is shown to an operator instead.
+- **A price ceiling.** The player was credited a price when the item dropped; the
+  market charges what it charges today. `withdrawals.market.maxOverpayBps` is how
+  far apart those may be before the site refuses and hands the item back.
+- **Requests are not atomic.** Three items are three sellers. A request can end
+  `PARTIAL`, and the profile page says which item went where.
+
+Currency matters more than it looks: the market quotes roubles in kopecks but
+dollars and euros in *thousandths*, and reports balances as floats in whole
+units. An account whose currency differs from the site's settlement currency is
+refused outright rather than converted through a display rate.
+
+The channel is chosen by the `withdrawals.provider` setting and stamped on each
+request when it is made, so switching it never strands anything in flight.
+
+Register an account — as many as you need:
+
+```bash
+MARKET_ACCOUNT_LABEL=main MARKET_ACCOUNT_KEY=... pnpm --filter @caseforge/bot add-market-account
+```
+
+The key is read from the environment rather than the command line, and stored
+encrypted under `BOT_SECRETS_KEY`; only the worker ever decrypts one. The back
+office reports balance and health from snapshots the worker writes, and can take
+an account out of rotation, but never sees a key.
+
+---
+
 ## Steam bots
+
+The alternative channel, kept because a site that has already funded a farm
+should not be forced off it, and because an account holding its own inventory is
+the only way to deliver something the market is not selling.
 
 A bot is a separate Steam account with the mobile authenticator enabled.
 `shared_secret` and `identity_secret` come from the maFile; without them offers
@@ -481,19 +558,24 @@ apps/
     src/contracts/           contracts: solved outcome table, roll, reward
     src/bonus/               the daily wheel: cooldown, roll, vouchers
     src/promo/               promo codes: rules, preview, redemption
-    src/inventory/           inventory: filters, selling, the withdrawal stub
+    src/inventory/           inventory: filters, selling
     src/drops/               batched WebSocket feed
     src/withdrawals/         withdrawal requests and queueing
+    src/market/              the market.csgo.com account, for the back office
     src/admin/               CRM: reports, case builder, audit
     src/steam/               OpenID, the Steam market, price and image sync
     src/common/              config, Prisma, Redis, FX rates, roles, nightly reconciliation
     test/smoke.mjs           end-to-end run against a live API
   bot/
+    src/market-pool.ts       the market accounts: throttling, balances, whose turn it is
+    src/market-processor.ts  buying on market.csgo.com and settling a request
+    src/settings-reader.ts   the runtime settings, as the worker reads them
     src/crypto.ts            bot secret encryption
     src/steam-bot.ts         wrapper over steam-user / steamcommunity / tradeoffer-manager
     src/bot-pool.ts          the farm: who can hand out which items
-    src/withdrawal-processor.ts  idempotent request handling
+    src/withdrawal-processor.ts  idempotent request handling on the bot channel
     scripts/add-bot.ts       bot registration
+    scripts/add-market-account.ts  market key registration
   web/
     src/app/                 home, case, upgrade, contract, bonus, profile, CRM, Steam callback
     src/app/admin/cases/     case list and builder
