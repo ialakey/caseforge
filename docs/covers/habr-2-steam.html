@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:780px; height:440px; }
+  body {
+    font-family:"Segoe UI",system-ui,sans-serif;
+    background:#0a1016;
+    color:#e8ecf4;
+    overflow:hidden;
+    position:relative;
+  }
+  .glow {
+    position:absolute; inset:0;
+    background:
+      radial-gradient(640px 420px at 92% 6%, rgba(102,192,244,.22), transparent 62%),
+      radial-gradient(480px 320px at -4% 104%, rgba(27,40,56,.9), transparent 66%);
+  }
+  .grid {
+    position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+    background-size:26px 26px;
+    mask-image:linear-gradient(to bottom, rgba(0,0,0,.85), transparent 80%);
+  }
+  .wrap { position:relative; height:100%; padding:36px 46px 32px; display:flex; flex-direction:column; }
+
+  .kicker {
+    font-family:Consolas,monospace;
+    font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+    color:#6f8497; display:flex; align-items:center; gap:10px;
+  }
+  .kicker b { color:#66c0f4; font-weight:600; letter-spacing:.14em; }
+  .kicker .dot { width:4px; height:4px; border-radius:50%; background:#2b3d4f; }
+
+  h1 { margin-top:22px; font-size:50px; line-height:1.05; font-weight:700; letter-spacing:-.022em; }
+  h1 em { font-style:normal; color:#66c0f4; }
+
+  .sub { margin-top:15px; font-size:17px; line-height:1.45; color:#8fa3b5; max-width:645px; }
+
+  .spacer { flex:1; }
+
+  .rakes {
+    margin-top:20px; margin-bottom:18px;
+    font-family:Consolas,monospace; font-size:12.5px; line-height:1.8;
+    color:#7e93a6;
+  }
+  .rakes div span { color:#ff6b6b; margin-right:10px; }
+
+  .cards { display:flex; gap:12px; }
+  .card {
+    flex:1; background:rgba(22,33,45,.72);
+    border:1px solid rgba(102,192,244,.16);
+    border-radius:8px; padding:15px 16px 16px;
+  }
+  .card .lbl {
+    font-family:Consolas,monospace; font-size:10.5px; letter-spacing:.11em;
+    text-transform:uppercase; color:#5f748a; margin-bottom:9px;
+  }
+  .card .val { font-family:Consolas,monospace; font-size:14.5px; color:#dbe6f0; line-height:1.5; }
+  .card .val s { text-decoration:none; color:#ff6b6b; }
+  .card .val u { text-decoration:none; color:#ffd24a; }
+  .card .val i { font-style:normal; color:#7fe7b0; }
+  .card .val .dim { color:#5f748a; font-size:12.5px; line-height:1.55; }
+</style></head>
+<body>
+<div class="glow"></div><div class="grid"></div>
+<div class="wrap">
+  <div class="kicker"><b>CASEFORGE</b><span class="dot"></span>интеграция со Steam<span class="dot"></span>MIT</div>
+
+  <h1>Steam глазами <em>разработчика</em></h1>
+  <div class="sub">OpenID из 2007-го, звёздочка в имени ножа и цена строкой в чужой локали. Слой, который сожрал больше времени, чем вся игровая логика</div>
+
+  <div class="rakes">
+    <div><span>&#10007;</span>check_authentication обязателен &mdash; иначе вход подделывается в одну строку</div>
+    <div><span>&#10007;</span>email Steam не отдаёт никогда, ни одним из путей</div>
+    <div><span>&#10007;</span>в XML профиля лежат чужие аватары, и парсер подставляет случайного друга</div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="lbl">вход</div>
+      <div class="val">OpenID <s>2.0</s><br><span class="dim">/openid/login &middot; 2007<br>отдаёт только SteamID64</span></div>
+    </div>
+    <div class="card">
+      <div class="lbl">имя предмета</div>
+      <div class="val"><u>&#9733;</u> Karambit<br><span class="dim">| Doppler (FN)<br>без &#9733; нет цены и картинки</span></div>
+    </div>
+    <div class="card">
+      <div class="lbl">цена</div>
+      <div class="val">"1.234,56&euro;"<br><span class="dim">&rarr; <i>1234.56</i><br>разделитель &mdash; позиционно</span></div>
+    </div>
+  </div>
+</div>
+</body></html>

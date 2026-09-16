@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:780px; height:440px; }
+  body {
+    font-family:"Segoe UI",system-ui,sans-serif;
+    background:#0b0d12;
+    color:#e8ecf4;
+    overflow:hidden;
+    position:relative;
+  }
+  .glow {
+    position:absolute; inset:0;
+    background:
+      radial-gradient(620px 400px at 88% -12%, rgba(75,105,255,.28), transparent 62%),
+      radial-gradient(520px 340px at 4% 108%, rgba(211,44,230,.16), transparent 64%);
+  }
+  .grid {
+    position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size:26px 26px;
+    mask-image:linear-gradient(to bottom, rgba(0,0,0,.9), transparent 78%);
+  }
+  .wrap { position:relative; height:100%; padding:38px 46px 34px; display:flex; flex-direction:column; }
+
+  .kicker {
+    font-family:Consolas,"Cascadia Mono",monospace;
+    font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+    color:#7d8aa3;
+    display:flex; align-items:center; gap:10px;
+  }
+  .kicker b { color:#4b69ff; font-weight:600; letter-spacing:.14em; }
+  .kicker .dot { width:4px; height:4px; border-radius:50%; background:#33405c; }
+
+  h1 {
+    margin-top:22px;
+    font-size:56px; line-height:1.04; font-weight:700; letter-spacing:-.022em;
+  }
+  h1 .neq {
+    color:#ff4d6d;
+    font-family:Consolas,monospace;
+    font-weight:700;
+    padding:0 2px;
+  }
+  h1 .q { color:#8b97ad; }
+
+  .sub {
+    margin-top:16px;
+    font-size:17.5px; line-height:1.45; color:#9aa6bd; max-width:625px; font-weight:400;
+  }
+
+  .spacer { flex:1; }
+
+  .stats { display:flex; gap:12px; margin-top:24px; }
+  .stat {
+    flex:1; background:rgba(18,22,33,.66);
+    border:1px solid rgba(255,255,255,.07);
+    border-radius:8px; padding:12px 14px 13px;
+  }
+  .stat .lbl {
+    font-family:Consolas,monospace; font-size:10.5px; letter-spacing:.11em;
+    text-transform:uppercase; color:#5d6b85; margin-bottom:7px;
+  }
+  .stat .val { font-family:Consolas,monospace; font-size:16px; color:#dbe3f0; line-height:1.45; }
+  .stat .val span { display:block; color:#7d8aa3; font-size:11.5px; }
+
+  .hash {
+    font-family:Consolas,monospace; font-size:12.5px; color:#5d6b85;
+    margin-bottom:12px; letter-spacing:.01em;
+  }
+  .hash span { color:#7fe7b0; }
+
+  .bar { display:flex; height:16px; border-radius:4px; overflow:hidden; box-shadow:0 0 0 1px rgba(255,255,255,.07); }
+  .bar div { height:100%; }
+
+  .legend {
+    margin-top:12px; padding-bottom:2px; display:flex; gap:20px;
+    font-family:Consolas,monospace; font-size:12px; color:#7d8aa3;
+  }
+  .legend i { display:inline-block; width:7px; height:7px; border-radius:2px; margin-right:7px; vertical-align:1px; }
+  .legend b { color:#c9d3e6; font-weight:400; }
+
+  .scale {
+    margin-top:auto; padding-top:16px;
+    display:flex; justify-content:space-between;
+    font-family:Consolas,monospace; font-size:11.5px; color:#4e5b73;
+  }
+</style></head>
+<body>
+<div class="glow"></div><div class="grid"></div>
+<div class="wrap">
+  <div class="kicker"><b>CASEFORGE</b><span class="dot"></span>MIT<span class="dot"></span>16 000 строк TypeScript</div>
+
+  <h1>Provably fair <span class="neq">&ne;</span> <span class="q">«честно»</span></h1>
+  <div class="sub">Написал сайт с кейсами CS2 целиком и выложил в открытый доступ — про RTP, роллы и честность, которую можно пересчитать руками</div>
+
+  <div class="stats">
+    <div class="stat"><div class="lbl">RTP кейса</div><div class="val">92,4%<span>задаётся в админке</span></div></div>
+    <div class="stat"><div class="lbl">тикет-спейс</div><div class="val">1 000 000<span>зафиксирован навсегда</span></div></div>
+    <div class="stat"><div class="lbl">modulo bias</div><div class="val">0,023%<span>оставлен осознанно</span></div></div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="hash">sha256(serverSeed) = <span>7f3a9c1e&hellip;b402</span> &nbsp;|&nbsp; roll = HMAC(serverSeed, clientSeed:nonce) % 1 000 000</div>
+  <div class="bar">
+    <div style="width:63.2%;background:#4b69ff"></div>
+    <div style="width:21.6%;background:#8847ff"></div>
+    <div style="width:9.3%;background:#d32ce6"></div>
+    <div style="width:5.0%;background:#eb4b4b"></div>
+    <div style="width:0.9%;background:#ffd24a"></div>
+  </div>
+  <div class="legend">
+    <span><i style="background:#4b69ff"></i>M4A1-S <b>63,20%</b></span>
+    <span><i style="background:#8847ff"></i>21,60%</span>
+    <span><i style="background:#d32ce6"></i>9,30%</span>
+    <span><i style="background:#eb4b4b"></i>5,00%</span>
+    <span><i style="background:#ffd24a"></i>Karambit <b>0,90%</b></span>
+    <span style="margin-left:auto;color:#4e5b73">тикеты 0 &hellip; 1 000 000</span>
+  </div>
+</div>
+</body></html>
