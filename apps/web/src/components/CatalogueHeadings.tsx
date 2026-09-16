@@ -12,11 +12,11 @@ import { useT } from '../lib/settings';
  * server-rendered case list.
  */
 export function CatalogueHeadings({
-  hasCases,
-  children,
+  drops,
+  catalogue,
 }: {
-  hasCases: boolean;
-  children: ReactNode;
+  drops: ReactNode;
+  catalogue: ReactNode;
 }) {
   const t = useT();
 
@@ -24,12 +24,13 @@ export function CatalogueHeadings({
     <>
       <section>
         <SectionHeading>{t('home.latestDrops')}</SectionHeading>
-        {children}
+        {drops}
       </section>
 
-      <section>
+      {/* The anchor the banner's call to action jumps to. */}
+      <section id="cases" className="scroll-mt-24">
         <SectionHeading>{t('home.cases')}</SectionHeading>
-        {!hasCases && <p className="text-ink-faint">{t('home.noCases')}</p>}
+        {catalogue}
       </section>
     </>
   );

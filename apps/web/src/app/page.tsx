@@ -1,5 +1,5 @@
 import type { CaseView } from '@caseforge/shared';
-import { CaseCard } from '../components/CaseCard';
+import { CaseCatalogue } from '../components/CaseCatalogue';
 import { CatalogueHeadings } from '../components/CatalogueHeadings';
 import { BonusTeaser } from '../components/BonusTeaser';
 import { Hero } from '../components/Hero';
@@ -31,19 +31,7 @@ export default async function HomePage() {
           have to find the bonus page to learn that. */}
       <BonusTeaser />
 
-      <CatalogueHeadings hasCases={cases.length > 0}>
-        <LiveDrops />
-      </CatalogueHeadings>
-
-      <section id="cases" className="scroll-mt-24">
-        {cases.length === 0 ? null : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {cases.map((item) => (
-              <CaseCard key={item.id} item={item} />
-            ))}
-          </div>
-        )}
-      </section>
+      <CatalogueHeadings drops={<LiveDrops />} catalogue={<CaseCatalogue cases={cases} />} />
     </div>
   );
 }

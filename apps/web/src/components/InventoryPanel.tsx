@@ -8,7 +8,6 @@ import {
   type PriceBandKey,
   type TranslationKey,
   INVENTORY_FILTERS,
-  PRICE_BANDS,
   isActionable,
   translateError,
 } from '@caseforge/shared';
@@ -17,6 +16,7 @@ import { useAuth } from '../lib/store';
 import { useSettings } from '../lib/settings';
 import { ItemImage } from './ItemImage';
 import { Money, useMoneyFormatter } from './Money';
+import { PriceBandFilter } from './PriceBandFilter';
 import { rarityColor } from './RarityBadge';
 
 export interface InventoryEntry {
@@ -208,30 +208,10 @@ export function InventoryPanel() {
         ))}
       </div>
 
-      {/* Price bands. Edges are fixed in the base currency and formatted for
-          display, so switching currency relabels them without re-sorting. */}
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          data-active={band === 'all'}
-          onClick={() => setBand('all')}
-          className="cf-chip px-3 py-1.5"
-        >
-          {t('inventory.bandAll')}
-        </button>
-        {PRICE_BANDS.map((b) => (
-          <button
-            key={b.key}
-            data-active={band === b.key}
-            onClick={() => setBand(b.key)}
-            className="cf-chip px-3 py-1.5"
-          >
-            {b.max === null
-              ? t('inventory.bandOver', { min: money(b.min) })
-              : b.min === 0
-                ? t('inventory.bandUnder', { max: money(b.max) })
-                : t('inventory.bandBetween', { min: money(b.min), max: money(b.max) })}
-          </button>
-        ))}
+      {/* Price bands. The server resolves the same edges for "sell everything",
+          so the row shows the full ladder rather than only the stocked bands. */}
+      <div className="mb-4">
+        <PriceBandFilter value={band} onChange={setBand} />
       </div>
 
       {error && (

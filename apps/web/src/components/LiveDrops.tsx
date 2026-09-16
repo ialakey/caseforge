@@ -10,6 +10,16 @@ import { rarityColor } from './RarityBadge';
 
 const MAX_VISIBLE = 12;
 
+/**
+ * The live drop feed.
+ *
+ * Cards are a fixed width rather than a minimum one. The feed is a flex row of
+ * non-shrinking items, so an auto width is the widest child's intrinsic width —
+ * a knife with a long name and a wear suffix would stretch its own card past
+ * every neighbour and leave the row looking ragged, and `truncate` would never
+ * fire because nothing constrained the line. A fixed width makes every drop the
+ * same size and puts the ellipsis back to work; the full name is on the title.
+ */
 export function LiveDrops() {
   const t = useT();
   const [drops, setDrops] = useState<LiveDrop[]>([]);
@@ -37,7 +47,7 @@ export function LiveDrops() {
       {drops.map((drop) => (
         <div
           key={drop.openingId}
-          className="min-w-[150px] shrink-0 rounded-lg border-t-2 bg-surface-raised/80 p-2 transition hover:bg-surface-overlay"
+          className="w-[150px] shrink-0 rounded-lg border-t-2 bg-surface-raised/80 p-2 transition hover:bg-surface-overlay"
           style={{ borderTopColor: rarityColor(drop.rarity) }}
         >
           <ItemImage
@@ -46,9 +56,13 @@ export function LiveDrops() {
             rarity={drop.rarity}
             className="mb-1 h-14 w-full"
           />
-          <div className="truncate text-xs font-medium">{drop.itemName}</div>
-          <div className="truncate text-[11px] text-ink-faint">{drop.username}</div>
-          <Money value={drop.price} className="text-xs font-semibold text-accent" />
+          <div className="truncate text-xs font-medium" title={drop.itemName}>
+            {drop.itemName}
+          </div>
+          <div className="truncate text-[11px] text-ink-faint" title={drop.username}>
+            {drop.username}
+          </div>
+          <Money value={drop.price} className="block text-xs font-semibold text-accent" />
         </div>
       ))}
     </div>
