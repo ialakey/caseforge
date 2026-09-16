@@ -99,8 +99,25 @@ export interface AutoBalanceResult {
   exponent: number;
 }
 
+/**
+ * Why a solve could not be done, as something translatable.
+ *
+ * The code and its parameters travel alongside the English `reason` rather than
+ * replacing it: this module is the single description of what the solver can
+ * refuse to do, and a caller without a dictionary — a script, a server log —
+ * must still get a sentence rather than a dotted key.
+ */
+export type AutoBalanceFailureCode =
+  | 'verdict.balance.noItems'
+  | 'verdict.balance.badPrice'
+  | 'verdict.balance.noPrices'
+  | 'verdict.balance.outOfRange';
+
 export interface AutoBalanceFailure {
   ok: false;
+  code: AutoBalanceFailureCode;
+  /** Values the translated form interpolates. */
+  params: Record<string, string | number>;
   reason: string;
   /** Achievable RTP bounds at this case price — a hint about what to change. */
   minRtp: number;
@@ -127,14 +144,30 @@ export function autoBalance(
   targetRtp: number,
 ): AutoBalanceOutcome {
   if (items.length === 0) {
-    return { ok: false, reason: 'The case has no items', minRtp: 0, maxRtp: 0 };
+    return {
+      ok: false,
+      code: 'verdict.balance.noItems',
+      params: {},
+      reason: 'The case has no items',
+      minRtp: 0,
+      maxRtp: 0,
+    };
   }
   if (casePrice <= 0) {
-    return { ok: false, reason: 'Case price must be greater than zero', minRtp: 0, maxRtp: 0 };
+    return {
+      ok: false,
+      code: 'verdict.balance.badPrice',
+      params: {},
+      reason: 'Case price must be greater than zero',
+      minRtp: 0,
+      maxRtp: 0,
+    };
   }
   if (items.some((i) => i.price <= 0)) {
     return {
       ok: false,
+      code: 'verdict.balance.noPrices',
+      params: {},
       reason: 'Every item needs a price — sync prices from Steam first',
       minRtp: 0,
       maxRtp: 0,
@@ -151,15 +184,31 @@ export function autoBalance(
   if (targetRtp < minRtp || targetRtp > maxRtp) {
     const cheapest = (minPrice / 100).toFixed(2);
     const priciest = (maxPrice / 100).toFixed(2);
+    const direction =
+      targetRtp < minRtp
+        ? 'The target is below that — raise the case price or add a cheaper item.'
+        : 'The target is above that — lower the case price or add a pricier item.';
+
     return {
       ok: false,
+      code: 'verdict.balance.outOfRange',
+      params: {
+        price: (casePrice / 100).toFixed(2),
+        min: (minRtp * 100).toFixed(1),
+        max: (maxRtp * 100).toFixed(1),
+        cheapest,
+        priciest,
+        // Which way to move is a nested message: the surrounding sentence is
+        // identical either way, so it is a parameter rather than a second code.
+        // The caller substitutes its own translation of `directionCode`.
+        direction,
+        directionCode: targetRtp < minRtp ? 'verdict.balance.below' : 'verdict.balance.above',
+      },
       reason:
         `At a case price of ${(casePrice / 100).toFixed(2)} the achievable RTP is ` +
         `${(minRtp * 100).toFixed(1)}% to ${(maxRtp * 100).toFixed(1)}% ` +
         `(items from ${cheapest} to ${priciest}). ` +
-        (targetRtp < minRtp
-          ? 'The target is below that — raise the case price or add a cheaper item.'
-          : 'The target is above that — lower the case price or add a pricier item.'),
+        direction,
       minRtp,
       maxRtp,
     };
@@ -198,12 +247,22 @@ export function autoBalance(
   return { ok: true, ranges, actualRtp, exponent };
 }
 
+export type RtpVerdictCode =
+  | 'verdict.rtp.overCap'
+  | 'verdict.rtp.aboveCorridor'
+  | 'verdict.rtp.belowCorridor'
+  | 'verdict.rtp.inside';
+
 export interface RtpVerdict {
   rtp: number;
   /** The case may be saved. */
   allowed: boolean;
   /** The case sits inside the working corridor. */
   healthy: boolean;
+  code: RtpVerdictCode;
+  /** Values the translated form interpolates. */
+  params: Record<string, string | number>;
+  /** English rendering, and the fallback wherever no dictionary is loaded. */
   message: string;
 }
 
@@ -211,14 +270,18 @@ export interface RtpVerdict {
 export function judgeRtp(rtp: number): RtpVerdict {
   const percent = (rtp * 100).toFixed(2);
 
+  const cap = (MAX_ALLOWED_RTP * 100).toFixed(0);
+
   if (rtp > MAX_ALLOWED_RTP) {
     return {
       rtp,
       allowed: false,
       healthy: false,
+      code: 'verdict.rtp.overCap',
+      params: { percent, cap },
       message:
         `RTP ${percent}% — the site loses money over time. ` +
-        `The cap is ${(MAX_ALLOWED_RTP * 100).toFixed(0)}%: raise the case price ` +
+        `The cap is ${cap}%: raise the case price ` +
         `or lower the odds on expensive items.`,
     };
   }
@@ -227,6 +290,8 @@ export function judgeRtp(rtp: number): RtpVerdict {
       rtp,
       allowed: true,
       healthy: false,
+      code: 'verdict.rtp.aboveCorridor',
+      params: { percent },
       message: `RTP ${percent}% — above the working corridor, the margin is razor thin.`,
     };
   }
@@ -235,8 +300,17 @@ export function judgeRtp(rtp: number): RtpVerdict {
       rtp,
       allowed: true,
       healthy: false,
+      code: 'verdict.rtp.belowCorridor',
+      params: { percent },
       message: `RTP ${percent}% — below the working corridor, such a case sells poorly.`,
     };
   }
-  return { rtp, allowed: true, healthy: true, message: `RTP ${percent}% — inside the working corridor.` };
+  return {
+    rtp,
+    allowed: true,
+    healthy: true,
+    code: 'verdict.rtp.inside',
+    params: { percent },
+    message: `RTP ${percent}% — inside the working corridor.`,
+  };
 }

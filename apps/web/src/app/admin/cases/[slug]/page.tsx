@@ -6,6 +6,7 @@ import {
   RTP_CORRIDOR,
   TICKET_SPACE,
   autoBalance,
+  translateDomainMessage,
   calculateRtp,
   judgeRtp,
   suggestCasePrice,
@@ -13,6 +14,7 @@ import {
   type SteamMarketItem,
 } from '@caseforge/shared';
 import { api, ApiError } from '../../../../lib/api';
+import { useSettings } from '../../../../lib/settings';
 import { useAuth } from '../../../../lib/store';
 import { ItemImage } from '../../../../components/ItemImage';
 import { Money } from '../../../../components/Money';
@@ -59,6 +61,7 @@ export default function CaseBuilderPage() {
   const params = useParams<{ slug: string }>();
   const isNew = params.slug === 'new';
   const { user } = useAuth();
+  const { t, locale } = useSettings();
 
   const [slug, setSlug] = useState(isNew ? '' : params.slug);
   const [name, setName] = useState('');
@@ -94,7 +97,7 @@ export default function CaseBuilderPage() {
         setItems(data.items);
         setLoaded(true);
       })
-      .catch(() => setError('Could not load the case'));
+      .catch(() => setError(t('admin.case.loadFailed')));
   }, [user, isNew, params.slug]);
 
   const priceMinor = Math.round(Number.parseFloat(priceMajor.replace(',', '.')) * 100) || 0;
@@ -121,7 +124,7 @@ export default function CaseBuilderPage() {
         ),
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed');
+      setError(err instanceof Error ? err.message : t('admin.case.searchFailed'));
     } finally {
       setSearching(false);
     }
@@ -134,7 +137,7 @@ export default function CaseBuilderPage() {
    */
   async function addItem(marketHashName: string): Promise<void> {
     if (items.some((i) => i.marketHashName === marketHashName)) {
-      setError('That item is already in the case');
+      setError(t('admin.case.alreadyInCase'));
       return;
     }
     setAddingName(marketHashName);
@@ -146,7 +149,7 @@ export default function CaseBuilderPage() {
       );
       const imported = res.items[0];
       if (!imported) {
-        setError(res.failed[0]?.reason ?? 'The item was not imported');
+        setError(res.failed[0]?.reason ?? t('admin.case.notImported'));
         return;
       }
 
@@ -166,7 +169,7 @@ export default function CaseBuilderPage() {
       ]);
       setNotice(`Added: ${imported.name}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add the item');
+      setError(err instanceof Error ? err.message : t('admin.case.addFailed'));
     } finally {
       setAddingName(null);
     }
@@ -180,12 +183,12 @@ export default function CaseBuilderPage() {
   function useTopItemImage(): void {
     const withImage = items.filter((i) => i.imageUrl);
     if (withImage.length === 0) {
-      setError('None of the items has an image');
+      setError(t('admin.case.noImage'));
       return;
     }
     const top = withImage.reduce((a, b) => (a.price > b.price ? a : b));
     setImageUrl(top.imageUrl!);
-    setNotice(`Image taken from "${top.name}"`);
+    setNotice(t('admin.case.imageFrom', { name: top.name }));
   }
 
   /** Lay out the odds for the target RTP. */
@@ -194,13 +197,30 @@ export default function CaseBuilderPage() {
     setNotice(null);
 
     if (priceMinor <= 0) {
-      setError('Set the case price first');
+      setError(t('admin.case.setPriceFirst'));
       return;
     }
 
     const outcome = autoBalance(items, priceMinor, targetRtp / 100);
     if (!outcome.ok) {
-      setError(outcome.reason);
+      // The solver ships a code with its parameters alongside the English
+      // sentence; one of those parameters is itself a code.
+      setError(
+        translateDomainMessage(
+          locale,
+          outcome.code,
+          {
+            ...outcome.params,
+            direction: translateDomainMessage(
+              locale,
+              String(outcome.params.directionCode ?? ''),
+              {},
+              String(outcome.params.direction ?? ''),
+            ),
+          },
+          outcome.reason,
+        ),
+      );
       return;
     }
 
@@ -212,8 +232,8 @@ export default function CaseBuilderPage() {
       })),
     );
     setNotice(
-      `Odds laid out, actual RTP ${(outcome.actualRtp * 100).toFixed(2)}%. ` +
-        'Pricier items received lower odds.',
+      t('admin.case.oddsDone', { rtp: (outcome.actualRtp * 100).toFixed(2) }) +
+        t('admin.case.pricierLower'),
     );
   }
 
@@ -221,12 +241,12 @@ export default function CaseBuilderPage() {
   function fitPrice(): void {
     setError(null);
     if (!coverageOk) {
-      setError('Lay out the odds first — the ranges must cover the whole space');
+      setError(t('admin.case.layoutFirst'));
       return;
     }
     const suggested = suggestCasePrice(items, targetRtp / 100);
     setPriceMajor((suggested / 100).toFixed(2));
-    setNotice(`Price fitted to an RTP of ${targetRtp}%.`);
+    setNotice(t('admin.case.priceFitted', { rtp: targetRtp }));
   }
 
   async function save(): Promise<void> {
@@ -253,7 +273,7 @@ export default function CaseBuilderPage() {
       });
       router.push('/admin/cases');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not save the case');
+      setError(err instanceof ApiError ? err.message : t('admin.case.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -272,7 +292,9 @@ export default function CaseBuilderPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-semibold">{isNew ? 'New case' : `Case: ${name}`}</h1>
+      <h1 className="text-2xl font-semibold">
+        {isNew ? t('admin.case.new') : t('admin.case.title', { name })}
+      </h1>
 
       {error && <p className="rounded bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>}
       {notice && (
@@ -281,7 +303,7 @@ export default function CaseBuilderPage() {
 
       <section className="grid gap-4 rounded-lg border border-neutral-800 bg-neutral-900 p-4 md:grid-cols-5">
         <label className="text-sm">
-          <span className="mb-1 block text-neutral-500">Name (Russian)</span>
+          <span className="mb-1 block text-neutral-500">{t('admin.case.nameRu')}</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -290,7 +312,7 @@ export default function CaseBuilderPage() {
           />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-neutral-500">Name (English)</span>
+          <span className="mb-1 block text-neutral-500">{t('admin.case.nameEn')}</span>
           <input
             value={nameEn}
             onChange={(e) => setNameEn(e.target.value)}
@@ -299,7 +321,7 @@ export default function CaseBuilderPage() {
           />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-neutral-500">Slug (in the URL)</span>
+          <span className="mb-1 block text-neutral-500">{t('admin.case.slug')}</span>
           <input
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
@@ -309,7 +331,7 @@ export default function CaseBuilderPage() {
           />
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-neutral-500">Case price</span>
+          <span className="mb-1 block text-neutral-500">{t('admin.case.price')}</span>
           <input
             value={priceMajor}
             onChange={(e) => setPriceMajor(e.target.value)}
@@ -325,10 +347,10 @@ export default function CaseBuilderPage() {
               checked={isActive}
               onChange={(e) => setIsActive(e.target.checked)}
             />
-            <span>Active</span>
+            <span>{t('admin.active')}</span>
           </label>
           <label>
-            <span className="mb-1 block text-neutral-500">Order</span>
+            <span className="mb-1 block text-neutral-500">{t('admin.case.order')}</span>
             <input
               type="number"
               value={sortOrder}
@@ -340,11 +362,8 @@ export default function CaseBuilderPage() {
       </section>
 
       <section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-        <h2 className="font-medium">Case image</h2>
-        <p className="text-sm text-neutral-500">
-          Shown on the showcase and in this list. With no image of its own, borrow the picture of
-          the priciest item in the case — that way the case is recognised by its top skin.
-        </p>
+        <h2 className="font-medium">{t('admin.case.imageTitle')}</h2>
+        <p className="text-sm text-neutral-500">{t('admin.case.imageHint')}</p>
         <div className="flex flex-wrap items-start gap-3">
           <div className="h-24 w-32 shrink-0 overflow-hidden rounded border border-neutral-800 bg-neutral-950">
             {imageUrl.trim() === '' ? (
@@ -366,14 +385,14 @@ export default function CaseBuilderPage() {
                 disabled={items.length === 0}
                 className="rounded bg-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-700 disabled:opacity-40"
               >
-                Use the top item's image
+                {t('admin.case.useTopImage')}
               </button>
               {imageUrl !== '' && (
                 <button
                   onClick={() => setImageUrl('')}
                   className="rounded bg-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-700"
                 >
-                  Clear
+                  {t('common.clear')}
                 </button>
               )}
             </div>
@@ -382,17 +401,17 @@ export default function CaseBuilderPage() {
       </section>
 
       <section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-        <h2 className="font-medium">Balance</h2>
+        <h2 className="font-medium">{t('admin.case.balanceTitle')}</h2>
         <p className="text-sm text-neutral-500">
-          The odds are solved so the expected return matches the target RTP: the pricier the item,
-          the rarer it is. The working corridor is {(RTP_CORRIDOR.min * 100).toFixed(0)}–
-          {(RTP_CORRIDOR.max * 100).toFixed(0)}%. The server refuses to save a case returning more
-          than 98%: over time such a case runs at a loss.
+          {t('admin.case.balanceHint', {
+            min: (RTP_CORRIDOR.min * 100).toFixed(0),
+            max: (RTP_CORRIDOR.max * 100).toFixed(0),
+          })}
         </p>
 
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
-            <span className="mb-1 block text-neutral-500">Target RTP, %</span>
+            <span className="mb-1 block text-neutral-500">{t('admin.case.targetRtp')}</span>
             <input
               type="number"
               min={50}
@@ -408,20 +427,20 @@ export default function CaseBuilderPage() {
             disabled={items.length === 0}
             className="rounded bg-amber-500 px-3 py-1.5 text-sm font-medium text-neutral-950 hover:bg-amber-400 disabled:opacity-40"
           >
-            Solve the odds
+            {t('admin.case.solveOdds')}
           </button>
           <button
             onClick={fitPrice}
             disabled={items.length === 0}
             className="rounded bg-neutral-800 px-3 py-1.5 text-sm hover:bg-neutral-700 disabled:opacity-40"
           >
-            Fit price to RTP
+            {t('admin.case.fitPrice')}
           </button>
         </div>
 
         <div className="flex flex-wrap gap-6 text-sm">
           <div>
-            <span className="text-neutral-500">Current RTP: </span>
+            <span className="text-neutral-500">{t('admin.case.currentRtp')}</span>
             <span
               className={
                 !verdict.allowed
@@ -435,47 +454,52 @@ export default function CaseBuilderPage() {
             </span>
           </div>
           <div>
-            <span className="text-neutral-500">Site margin: </span>
+            <span className="text-neutral-500">{t('admin.case.margin')}</span>
             <span className={rtp < 1 ? 'text-emerald-400' : 'text-red-400'}>
               {((1 - rtp) * 100).toFixed(2)}%
             </span>
           </div>
           <div>
-            <span className="text-neutral-500">Ticket coverage: </span>
+            <span className="text-neutral-500">{t('admin.case.coverage')}</span>
             <span className={coverageOk ? 'text-emerald-400' : 'text-red-400'}>
-              {coverage.toLocaleString('ru-RU')} / {TICKET_SPACE.toLocaleString('ru-RU')}
+              {coverage.toLocaleString(locale)} / {TICKET_SPACE.toLocaleString(locale)}
             </span>
           </div>
         </div>
 
-        {items.length > 0 && <p className="text-sm text-neutral-400">{verdict.message}</p>}
+        {items.length > 0 && (
+          <p className="text-sm text-neutral-400">
+            {translateDomainMessage(locale, verdict.code, verdict.params, verdict.message)}
+          </p>
+        )}
         {unconfirmed.length > 0 && (
           <p className="text-sm text-amber-400">
-            Price not confirmed by Steam: {unconfirmed.map((i) => i.name).join(', ')}. The RTP uses
-            those values as they are — check them by hand.
+            {t('admin.case.unconfirmed', { names: unconfirmed.map((i) => i.name).join(', ') })}
           </p>
         )}
         {itemsWithoutPrice.length > 0 && (
           <p className="text-sm text-red-400">
-            No price: {itemsWithoutPrice.map((i) => i.name).join(', ')}. Refresh prices from Steam.
+            {t('admin.case.noPriceList', {
+              names: itemsWithoutPrice.map((i) => i.name).join(', '),
+            })}
           </p>
         )}
       </section>
 
       <section className="space-y-3">
-        <h2 className="font-medium">Case contents ({items.length})</h2>
+        <h2 className="font-medium">{t('admin.case.contents', { count: items.length })}</h2>
         {items.length === 0 ? (
-          <p className="text-sm text-neutral-500">Add items from the search below.</p>
+          <p className="text-sm text-neutral-500">{t('admin.case.addFromSearch')}</p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-neutral-800">
             <table className="w-full text-left text-sm">
               <thead className="bg-neutral-900 text-xs uppercase text-neutral-500">
                 <tr>
-                  <th className="px-3 py-2">Item</th>
-                  <th className="px-3 py-2">Rarity</th>
-                  <th className="px-3 py-2">Price</th>
-                  <th className="px-3 py-2">Chance</th>
-                  <th className="px-3 py-2">Tickets</th>
+                  <th className="px-3 py-2">{t('admin.case.item')}</th>
+                  <th className="px-3 py-2">{t('admin.case.rarity')}</th>
+                  <th className="px-3 py-2">{t('admin.cases.price')}</th>
+                  <th className="px-3 py-2">{t('admin.case.chance')}</th>
+                  <th className="px-3 py-2">{t('admin.case.tickets')}</th>
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
@@ -503,7 +527,7 @@ export default function CaseBuilderPage() {
                         {item.price > 0 ? (
                           <Money value={item.price} className="text-amber-400" />
                         ) : (
-                          <span className="text-red-400">no price</span>
+                          <span className="text-red-400">{t('admin.case.noPrice')}</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-neutral-400">
@@ -511,15 +535,15 @@ export default function CaseBuilderPage() {
                       </td>
                       <td className="px-3 py-2 text-xs text-neutral-600">
                         {hasRange
-                          ? `${item.rangeFrom.toLocaleString('ru-RU')}–${item.rangeTo.toLocaleString('ru-RU')}`
-                          : 'not laid out'}
+                          ? `${item.rangeFrom.toLocaleString(locale)}–${item.rangeTo.toLocaleString(locale)}`
+                          : t('admin.case.notLaidOut')}
                       </td>
                       <td className="px-3 py-2 text-right">
                         <button
                           onClick={() => removeItem(item.itemId)}
                           className="text-neutral-500 hover:text-red-400"
                         >
-                          Remove
+                          {t('common.remove')}
                         </button>
                       </td>
                     </tr>
@@ -532,7 +556,7 @@ export default function CaseBuilderPage() {
       </section>
 
       <section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
-        <h2 className="font-medium">Search Steam for items</h2>
+        <h2 className="font-medium">{t('admin.case.searchSteam')}</h2>
         <div className="flex gap-2">
           <input
             value={query}
@@ -548,13 +572,10 @@ export default function CaseBuilderPage() {
             disabled={searching || query.trim().length < 2}
             className="rounded bg-neutral-800 px-4 py-1.5 text-sm hover:bg-neutral-700 disabled:opacity-40"
           >
-            {searching ? 'Searching...' : 'Search'}
+            {searching ? t('admin.case.searching') : t('admin.case.search')}
           </button>
         </div>
-        <p className="text-xs text-neutral-600">
-          Steam throttles requests, so results are cached for an hour and the settlement-currency
-          price is fetched separately when an item is added.
-        </p>
+        <p className="text-xs text-neutral-600">{t('admin.case.searchHint')}</p>
 
         {searchResults.length > 0 && (
           <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
@@ -576,7 +597,7 @@ export default function CaseBuilderPage() {
                   </div>
                   <div className="mt-1 text-[11px] text-neutral-500">
                     ~${((found.referencePriceUsd ?? 0) / 100).toFixed(2)} · {found.listings}{' '}
-                    listings
+                    {t('admin.case.listings')}
                   </div>
                   <button
                     onClick={() => void addItem(found.marketHashName)}
@@ -584,10 +605,10 @@ export default function CaseBuilderPage() {
                     className="mt-2 w-full rounded bg-neutral-800 py-1 text-xs hover:bg-neutral-700 disabled:opacity-40"
                   >
                     {already
-                      ? 'Already in the case'
+                      ? t('admin.case.alreadyIn')
                       : addingName === found.marketHashName
-                        ? 'Adding...'
-                        : 'Add'}
+                        ? t('admin.case.adding')
+                        : t('admin.case.add')}
                   </button>
                 </div>
               );
@@ -602,17 +623,17 @@ export default function CaseBuilderPage() {
           disabled={!canSave || saving}
           className="rounded-lg bg-amber-500 px-6 py-2.5 font-semibold text-neutral-950 hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {saving ? 'Saving...' : 'Save case'}
+          {saving ? t('admin.saving') : t('admin.case.saveCase')}
         </button>
         {!canSave && items.length > 0 && (
           <span className="text-sm text-neutral-500">
             {!coverageOk
-              ? 'Lay out the odds — tickets must cover the whole space'
+              ? t('admin.case.layoutOdds')
               : !verdict.allowed
-                ? 'RTP is above the allowed cap'
+                ? t('admin.case.rtpAboveCap')
                 : itemsWithoutPrice.length > 0
-                  ? 'Some items have no price'
-                  : 'Fill in the name, slug and price'}
+                  ? t('admin.case.someNoPrice')
+                  : t('admin.case.fillRequired')}
           </span>
         )}
       </div>

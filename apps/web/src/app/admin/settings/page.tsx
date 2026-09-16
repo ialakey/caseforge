@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
+  type Locale,
   type PublicSettingDef,
   type SettingGroup,
+  type TranslationKey,
   SETTING_GROUPS,
   translateError,
+  translateSetting,
 } from '@caseforge/shared';
 import { api, ApiError } from '../../../lib/api';
 import { useSettings } from '../../../lib/settings';
@@ -15,12 +18,13 @@ interface SettingsPayload {
   values: Record<string, unknown>;
 }
 
-const GROUP_TITLES: Record<SettingGroup, string> = {
-  site: 'Site',
-  deposits: 'Top-ups',
-  economy: 'Economy',
-  limits: 'Limits',
-  bonus: 'Daily bonus',
+const GROUP_TITLES: Record<SettingGroup, TranslationKey> = {
+  site: 'admin.settings.group.site',
+  deposits: 'admin.settings.group.deposits',
+  economy: 'admin.settings.group.economy',
+  limits: 'admin.settings.group.limits',
+  bonus: 'admin.settings.group.bonus',
+  withdrawals: 'admin.settings.group.withdrawals',
 };
 
 /**
@@ -33,7 +37,7 @@ const GROUP_TITLES: Record<SettingGroup, string> = {
  * list somebody has to remember to extend in three places.
  */
 export default function AdminSettingsPage() {
-  const { locale } = useSettings();
+  const { locale, t } = useSettings();
 
   const [payload, setPayload] = useState<SettingsPayload | null>(null);
   const [draft, setDraft] = useState<Record<string, unknown>>({});
@@ -47,9 +51,9 @@ export default function AdminSettingsPage() {
       setPayload(data);
       setDraft(data.values);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load settings');
+      setError(err instanceof ApiError ? err.message : t('admin.settings.loadFailed'));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -66,10 +70,12 @@ export default function AdminSettingsPage() {
       });
       setPayload((p) => (p ? { ...p, values } : p));
       setDraft(values);
-      setNotice('Saved');
+      setNotice(t('admin.saved'));
     } catch (err) {
       setError(
-        err instanceof ApiError ? translateError(locale, err.code, err.message) : 'Save failed',
+        err instanceof ApiError
+          ? translateError(locale, err.code, err.message)
+          : t('admin.saveFailed'),
       );
     } finally {
       setBusy(false);
@@ -77,7 +83,7 @@ export default function AdminSettingsPage() {
   }
 
   if (!payload) {
-    return <p className="text-ink-muted">{error ?? 'Loading...'}</p>;
+    return <p className="text-ink-muted">{error ?? t('admin.loading')}</p>;
   }
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(payload.values);
@@ -110,7 +116,7 @@ export default function AdminSettingsPage() {
 
         return (
           <section key={group} className="cf-panel p-5">
-            <h2 className="mb-4 font-medium">{GROUP_TITLES[group]}</h2>
+            <h2 className="mb-4 font-medium">{t(GROUP_TITLES[group])}</h2>
             <div className="space-y-4">
               {keys.map((key) => (
                 <Field
@@ -118,6 +124,7 @@ export default function AdminSettingsPage() {
                   settingKey={key}
                   def={payload.definitions[key]!}
                   value={draft[key]}
+                  locale={locale}
                   onChange={(v) => setDraft((d) => ({ ...d, [key]: v }))}
                 />
               ))}
@@ -133,19 +140,28 @@ function Field({
   settingKey,
   def,
   value,
+  locale,
   onChange,
 }: {
   settingKey: string;
   def: PublicSettingDef;
   value: unknown;
+  locale: Locale;
   onChange: (value: unknown) => void;
 }) {
+  const { t } = useSettings();
+
+  // The registry describes itself in English on the server; the panel looks the
+  // key up locally and only falls back to what it was sent.
+  const label = translateSetting(locale, settingKey, 'label', def.label) ?? def.label;
+  const hint = translateSetting(locale, settingKey, 'hint', def.hint);
+
   return (
     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_280px] sm:items-start">
       <div className="min-w-0">
-        <div className="text-sm font-medium">{def.label}</div>
+        <div className="text-sm font-medium">{label}</div>
         <div className="font-mono text-[11px] text-ink-faint">{settingKey}</div>
-        {def.hint && <div className="mt-0.5 text-xs text-ink-muted">{def.hint}</div>}
+        {hint && <div className="mt-0.5 text-xs text-ink-muted">{hint}</div>}
       </div>
 
       {def.kind === 'boolean' ? (
@@ -154,8 +170,23 @@ function Field({
           data-active={Boolean(value)}
           className="cf-chip w-fit px-3 py-1.5"
         >
-          {value ? 'On' : 'Off'}
+          {value ? t('admin.on') : t('admin.off')}
         </button>
+      ) : def.kind === 'enum' ? (
+        // The options come from the registry with the value, so the panel can
+        // never offer a choice the server would refuse to save.
+        <div className="flex flex-wrap gap-2">
+          {(def.options ?? []).map((option) => (
+            <button
+              key={option}
+              onClick={() => onChange(option)}
+              data-active={value === option}
+              className="cf-chip px-3 py-1.5"
+            >
+              {option}
+            </button>
+          ))}
+        </div>
       ) : def.kind === 'json' ? (
         <JsonField value={value} onChange={onChange} />
       ) : (

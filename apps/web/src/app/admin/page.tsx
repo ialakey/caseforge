@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/store';
+import { useSettings } from '../../lib/settings';
 import { Money } from '../../components/Money';
 
 interface Dashboard {
@@ -39,6 +40,7 @@ function Stat({ label, children }: { label: string; children: React.ReactNode })
 
 export default function AdminPage() {
   const { user } = useAuth();
+  const { t, locale } = useSettings();
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [cases, setCases] = useState<CaseRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -56,71 +58,73 @@ export default function AdminPage() {
       } catch (err) {
         setError(
           err instanceof ApiError && err.status === 403
-            ? 'Insufficient permissions for the CRM'
+            ? t('admin.noPermission')
             : err instanceof Error
               ? err.message
-              : 'Failed to load',
+              : t('admin.loadFailed'),
         );
       }
     })();
-  }, [user]);
+  }, [user, t]);
 
-  if (!user) return <p className="text-neutral-400">Sign in through Steam.</p>;
+  if (!user) return <p className="text-neutral-400">{t('admin.signInRequired')}</p>;
   if (error) return <p className="text-red-400">{error}</p>;
-  if (!dashboard) return <p className="text-neutral-400">Loading...</p>;
+  if (!dashboard) return <p className="text-neutral-400">{t('admin.loading')}</p>;
 
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">CRM · last 30 days</h1>
+        <h1 className="text-2xl font-semibold">{t('admin.dashboard.title')}</h1>
       </div>
       <div>
-        <p className="mt-1 text-sm text-neutral-500">
-          GGR is wagers minus wins. That is what shows earnings, not turnover.
-        </p>
+        <p className="mt-1 text-sm text-neutral-500">{t('admin.dashboard.ggrHint')}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="GGR">
+        <Stat label={t('admin.dashboard.ggr')}>
           <Money
             value={dashboard.ggr}
             className={dashboard.ggr >= 0 ? 'text-emerald-400' : 'text-red-400'}
           />
         </Stat>
-        <Stat label="Wagered">
+        <Stat label={t('admin.dashboard.wagered')}>
           <Money value={dashboard.wagered} />
         </Stat>
-        <Stat label="Won">
+        <Stat label={t('admin.dashboard.won')}>
           <Money value={dashboard.won} />
         </Stat>
-        <Stat label="Actual RTP">{(dashboard.actualRtp * 100).toFixed(1)}%</Stat>
-        <Stat label="Openings">{dashboard.openings.toLocaleString('ru-RU')}</Stat>
-        <Stat label="New players">{dashboard.newUsers}</Stat>
-        <Stat label="Active players">{dashboard.activeUsers}</Stat>
-        <Stat label="Withdrawals">
+        <Stat label={t('admin.dashboard.actualRtp')}>
+          {(dashboard.actualRtp * 100).toFixed(1)}%
+        </Stat>
+        <Stat label={t('admin.dashboard.openings')}>
+          {dashboard.openings.toLocaleString(locale)}
+        </Stat>
+        <Stat label={t('admin.dashboard.newUsers')}>{dashboard.newUsers}</Stat>
+        <Stat label={t('admin.dashboard.activeUsers')}>{dashboard.activeUsers}</Stat>
+        <Stat label={t('admin.dashboard.withdrawals')}>
           <Money value={dashboard.withdrawals.total} />
         </Stat>
       </div>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold">Per-case margin</h2>
+        <h2 className="mb-3 text-lg font-semibold">{t('admin.dashboard.perCase')}</h2>
         <div className="overflow-x-auto rounded-lg border border-neutral-800">
           <table className="w-full text-left text-sm">
             <thead className="bg-neutral-900 text-xs uppercase text-neutral-500">
               <tr>
-                <th className="px-3 py-2">Case</th>
-                <th className="px-3 py-2">Openings</th>
-                <th className="px-3 py-2">Wagered</th>
-                <th className="px-3 py-2">Won</th>
-                <th className="px-3 py-2">GGR</th>
-                <th className="px-3 py-2">RTP actual / planned</th>
+                <th className="px-3 py-2">{t('admin.dashboard.case')}</th>
+                <th className="px-3 py-2">{t('admin.dashboard.openings')}</th>
+                <th className="px-3 py-2">{t('admin.dashboard.wagered')}</th>
+                <th className="px-3 py-2">{t('admin.dashboard.won')}</th>
+                <th className="px-3 py-2">{t('admin.dashboard.ggr')}</th>
+                <th className="px-3 py-2">{t('admin.dashboard.rtpColumn')}</th>
               </tr>
             </thead>
             <tbody>
               {cases.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-3 py-4 text-neutral-500">
-                    No openings in this period.
+                    {t('admin.dashboard.empty')}
                   </td>
                 </tr>
               ) : (
@@ -150,10 +154,7 @@ export default function AdminPage() {
             </tbody>
           </table>
         </div>
-        <p className="mt-2 text-xs text-neutral-600">
-          A gap between actual and planned RTP over a large sample means either item prices have
-          shifted or the case ticket ranges are wrong.
-        </p>
+        <p className="mt-2 text-xs text-neutral-600">{t('admin.dashboard.rtpHint')}</p>
       </section>
     </div>
   );

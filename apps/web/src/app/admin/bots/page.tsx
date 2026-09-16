@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../../../lib/api';
+import { useSettings } from '../../../lib/settings';
 
 interface BotRow {
   id: string;
@@ -38,6 +39,7 @@ const TONE: Record<string, string> = {
  * browser form.
  */
 export default function AdminBotsPage() {
+  const { t } = useSettings();
   const [rows, setRows] = useState<BotRow[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,9 +48,9 @@ export default function AdminBotsPage() {
     try {
       setRows(await api<BotRow[]>('/api/admin/bots'));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load bots');
+      setError(err instanceof ApiError ? err.message : t('admin.bots.loadFailed'));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -64,7 +66,7 @@ export default function AdminBotsPage() {
       });
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not change the status');
+      setError(err instanceof ApiError ? err.message : t('admin.bots.statusFailed'));
     } finally {
       setBusyId(null);
     }
@@ -72,7 +74,7 @@ export default function AdminBotsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Bots</h1>
+      <h1 className="text-2xl font-semibold">{t('admin.bots.title')}</h1>
 
       {error && (
         <p className="rounded-lg bg-negative/15 px-3 py-2 text-sm text-negative">{error}</p>
@@ -80,18 +82,18 @@ export default function AdminBotsPage() {
 
       <section className="cf-panel overflow-hidden">
         <h2 className="border-b border-edge-subtle px-5 py-4 font-medium">
-          Farm <span className="text-ink-faint">{rows.length}</span>
+          {t('admin.bots.farm')} <span className="text-ink-faint">{rows.length}</span>
         </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-surface-overlay/60 text-xs uppercase tracking-wide text-ink-faint">
               <tr>
-                <th className="px-5 py-2.5">Bot</th>
-                <th className="px-3 py-2.5">SteamID64</th>
-                <th className="px-3 py-2.5">Status</th>
-                <th className="px-3 py-2.5">Inventory</th>
-                <th className="px-3 py-2.5">Last online</th>
-                <th className="px-3 py-2.5">Last error</th>
+                <th className="px-5 py-2.5">{t('admin.bots.bot')}</th>
+                <th className="px-3 py-2.5">{t('admin.bots.steamId')}</th>
+                <th className="px-3 py-2.5">{t('admin.bots.status')}</th>
+                <th className="px-3 py-2.5">{t('admin.bots.inventory')}</th>
+                <th className="px-3 py-2.5">{t('admin.bots.lastOnline')}</th>
+                <th className="px-3 py-2.5">{t('admin.bots.lastError')}</th>
                 <th className="px-3 py-2.5" />
               </tr>
             </thead>
@@ -122,7 +124,7 @@ export default function AdminBotsPage() {
                         disabled={busyId === b.id}
                         className="text-xs text-ink-faint hover:text-positive"
                       >
-                        enable
+                        {t('admin.enable')}
                       </button>
                     ) : (
                       <button
@@ -130,7 +132,7 @@ export default function AdminBotsPage() {
                         disabled={busyId === b.id}
                         className="text-xs text-ink-faint hover:text-negative"
                       >
-                        disable
+                        {t('admin.disable')}
                       </button>
                     )}
                   </td>
@@ -139,7 +141,7 @@ export default function AdminBotsPage() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-5 py-6 text-center text-ink-faint">
-                    No bots registered. Add one with{' '}
+                    {t('admin.bots.empty')}{' '}
                     <code className="text-ink-muted">pnpm --filter @caseforge/bot add-bot</code>.
                   </td>
                 </tr>

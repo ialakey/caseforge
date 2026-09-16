@@ -43,7 +43,7 @@ const BLANK = {
  * code cannot reset how many times it has been redeemed.
  */
 export default function AdminPromoPage() {
-  const { locale } = useSettings();
+  const { locale, t } = useSettings();
 
   const [rows, setRows] = useState<PromoCodeRow[]>([]);
   const [form, setForm] = useState({ ...BLANK });
@@ -55,9 +55,9 @@ export default function AdminPromoPage() {
     try {
       setRows(await api<PromoCodeRow[]>('/api/admin/promo-codes'));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not load promo codes');
+      setError(err instanceof ApiError ? err.message : t('admin.promo.loadFailed'));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -83,12 +83,14 @@ export default function AdminPromoPage() {
           expiresAt: form.expiresAt === '' ? null : new Date(form.expiresAt).toISOString(),
         }),
       });
-      setNotice(`Saved ${form.code.toUpperCase()}`);
+      setNotice(t('admin.promo.savedCode', { code: form.code.toUpperCase() }));
       setForm({ ...BLANK });
       await load();
     } catch (err) {
       setError(
-        err instanceof ApiError ? translateError(locale, err.code, err.message) : 'Save failed',
+        err instanceof ApiError
+          ? translateError(locale, err.code, err.message)
+          : t('admin.saveFailed'),
       );
     } finally {
       setBusy(false);
@@ -100,13 +102,13 @@ export default function AdminPromoPage() {
       await api(`/api/admin/promo-codes/${id}/deactivate`, { method: 'POST' });
       await load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Could not deactivate');
+      setError(err instanceof ApiError ? err.message : t('admin.promo.deactivateFailed'));
     }
   }
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Promo codes</h1>
+      <h1 className="text-2xl font-semibold">{t('admin.promo.title')}</h1>
 
       {error && (
         <p className="rounded-lg bg-negative/15 px-3 py-2 text-sm text-negative">{error}</p>
@@ -116,14 +118,11 @@ export default function AdminPromoPage() {
       )}
 
       <section className="cf-panel p-5">
-        <h2 className="mb-1 font-medium">Create or edit</h2>
-        <p className="mb-4 text-xs text-ink-faint">
-          A code that already exists is overwritten, keeping its redemption count. Percentage
-          values are basis points: 1000 = 10%. Money is in minor units.
-        </p>
+        <h2 className="mb-1 font-medium">{t('admin.promo.create')}</h2>
+        <p className="mb-4 text-xs text-ink-faint">{t('admin.promo.createHint')}</p>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Labelled label="Code">
+          <Labelled label={t('admin.promo.code')}>
             <input
               value={form.code}
               onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
@@ -132,7 +131,7 @@ export default function AdminPromoPage() {
             />
           </Labelled>
 
-          <Labelled label="Kind">
+          <Labelled label={t('admin.promo.kind')}>
             <div className="flex gap-1.5">
               {([Kind.PERCENT, Kind.FIXED] as PromoKind[]).map((k) => (
                 <button
@@ -141,40 +140,42 @@ export default function AdminPromoPage() {
                   onClick={() => setForm({ ...form, kind: k })}
                   className="cf-chip px-3 py-1.5"
                 >
-                  {k === Kind.PERCENT ? '%' : 'Fixed'}
+                  {k === Kind.PERCENT ? '%' : t('admin.promo.fixed')}
                 </button>
               ))}
             </div>
           </Labelled>
 
           <NumberField
-            label={form.kind === Kind.PERCENT ? 'Value, bps' : 'Value, minor'}
+            label={
+              form.kind === Kind.PERCENT ? t('admin.promo.valueBps') : t('admin.promo.valueMinor')
+            }
             value={form.value}
             onChange={(v) => setForm({ ...form, value: v as number })}
           />
           <NumberField
-            label="Min top-up, minor"
+            label={t('admin.promo.minDepositMinor')}
             value={form.minDeposit}
             onChange={(v) => setForm({ ...form, minDeposit: v as number })}
           />
           <NumberField
-            label="Max bonus, minor"
+            label={t('admin.promo.maxBonusMinor')}
             value={form.maxBonus}
-            placeholder="no cap"
+            placeholder={t('admin.promo.noCap')}
             onChange={(v) => setForm({ ...form, maxBonus: v })}
           />
           <NumberField
-            label="Total uses"
+            label={t('admin.promo.totalUses')}
             value={form.maxUses}
-            placeholder="unlimited"
+            placeholder={t('admin.promo.unlimited')}
             onChange={(v) => setForm({ ...form, maxUses: v })}
           />
           <NumberField
-            label="Uses per player"
+            label={t('admin.promo.usesPerUser')}
             value={form.perUserLimit}
             onChange={(v) => setForm({ ...form, perUserLimit: v as number })}
           />
-          <Labelled label="Expires">
+          <Labelled label={t('admin.promo.expires')}>
             <input
               type="date"
               value={form.expiresAt}
@@ -190,33 +191,33 @@ export default function AdminPromoPage() {
             disabled={busy || form.code.trim().length < 3}
             className="cf-btn-primary px-5 py-2 text-sm"
           >
-            {busy ? 'Saving...' : 'Save code'}
+            {busy ? t('admin.saving') : t('admin.promo.saveCode')}
           </button>
           <button
             data-active={form.isActive}
             onClick={() => setForm({ ...form, isActive: !form.isActive })}
             className="cf-chip px-3 py-1.5"
           >
-            {form.isActive ? 'Active' : 'Inactive'}
+            {form.isActive ? t('admin.active') : t('admin.inactive')}
           </button>
         </div>
       </section>
 
       <section className="cf-panel overflow-hidden">
         <h2 className="border-b border-edge-subtle px-5 py-4 font-medium">
-          Existing codes <span className="text-ink-faint">{rows.length}</span>
+          {t('admin.promo.existing')} <span className="text-ink-faint">{rows.length}</span>
         </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-surface-overlay/60 text-xs uppercase tracking-wide text-ink-faint">
               <tr>
-                <th className="px-5 py-2.5">Code</th>
-                <th className="px-3 py-2.5">Bonus</th>
-                <th className="px-3 py-2.5">Min top-up</th>
-                <th className="px-3 py-2.5">Used</th>
-                <th className="px-3 py-2.5">Per player</th>
-                <th className="px-3 py-2.5">Expires</th>
-                <th className="px-3 py-2.5">State</th>
+                <th className="px-5 py-2.5">{t('admin.promo.code')}</th>
+                <th className="px-3 py-2.5">{t('admin.promo.bonus')}</th>
+                <th className="px-3 py-2.5">{t('admin.promo.minDeposit')}</th>
+                <th className="px-3 py-2.5">{t('admin.promo.used')}</th>
+                <th className="px-3 py-2.5">{t('admin.promo.perUser')}</th>
+                <th className="px-3 py-2.5">{t('admin.promo.expires')}</th>
+                <th className="px-3 py-2.5">{t('admin.promo.state')}</th>
                 <th className="px-3 py-2.5" />
               </tr>
             </thead>
@@ -231,7 +232,7 @@ export default function AdminPromoPage() {
                         {p.maxBonus !== null && (
                           <span className="text-ink-faint">
                             {' '}
-                            up to <Money value={p.maxBonus} />
+                            {t('admin.promo.upTo')} <Money value={p.maxBonus} />
                           </span>
                         )}
                       </>
@@ -252,7 +253,7 @@ export default function AdminPromoPage() {
                   </td>
                   <td className="px-3 py-2.5">
                     <span className={p.isActive ? 'text-positive' : 'text-ink-faint'}>
-                      {p.isActive ? 'active' : 'off'}
+                      {p.isActive ? t('admin.promo.stateOn') : t('admin.promo.stateOff')}
                     </span>
                   </td>
                   <td className="px-3 py-2.5 text-right">
@@ -261,7 +262,7 @@ export default function AdminPromoPage() {
                         onClick={() => void deactivate(p.id)}
                         className="text-xs text-ink-faint hover:text-negative"
                       >
-                        deactivate
+                        {t('admin.promo.deactivate')}
                       </button>
                     )}
                   </td>
@@ -270,7 +271,7 @@ export default function AdminPromoPage() {
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-5 py-6 text-center text-ink-faint">
-                    No promo codes yet.
+                    {t('admin.promo.empty')}
                   </td>
                 </tr>
               )}
