@@ -35,6 +35,13 @@ export class WithdrawalProcessor {
       return;
     }
 
+    // The channel is stamped on the request, so a request made while the site
+    // was buying on the market is never handed to a bot halfway through.
+    if (withdrawal.provider !== 'BOTS') {
+      console.log(`[withdrawal] ${withdrawalId} belongs to the ${withdrawal.provider} channel`);
+      return;
+    }
+
     // The request already left or is closed — reprocessing is not allowed.
     if (withdrawal.status !== 'PENDING') {
       console.log(`[withdrawal] ${withdrawalId} is ${withdrawal.status}, skipping`);
@@ -53,7 +60,7 @@ export class WithdrawalProcessor {
     }
 
     try {
-      const itemIds = withdrawal.items.map((i) => i.itemId);
+      const itemIds = withdrawal.items.map((line) => line.itemId);
       const match = await this.pool.findBotFor(itemIds);
       if (!match) {
         throw new Error('No bot holds every item in the request');
@@ -100,7 +107,12 @@ export class WithdrawalProcessor {
    */
   async pollSentOffers(): Promise<void> {
     const sent = await this.prisma.withdrawal.findMany({
-      where: { status: 'SENT', tradeOfferId: { not: null }, botId: { not: null } },
+      where: {
+        provider: 'BOTS',
+        status: 'SENT',
+        tradeOfferId: { not: null },
+        botId: { not: null },
+      },
     });
 
     for (const withdrawal of sent) {

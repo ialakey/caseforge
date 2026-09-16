@@ -6,6 +6,8 @@ export * from './tickets.ts';
 export * from './verify.ts';
 export * from './balancing.ts';
 export * from './steam-market.ts';
+export * from './market.ts';
+export * from './market-client.ts';
 export * from './steam-profile.ts';
 export * from './upgrade.ts';
 export * from './contract.ts';

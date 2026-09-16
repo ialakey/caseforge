@@ -107,49 +107,73 @@ console.log('\n5. Price bands select what they advertise');
   }
 }
 
-console.log('\n6. Withdrawing keeps the row and changes the status');
+console.log('\n6. Withdrawing locks the item behind a request');
 {
   const available = await get('/api/inventory?filter=available');
-  if (available.length === 0) throw new Error('No available items — open a case first');
+  if (available.length === 0) throw new Error('No available items - open a case first');
   const target = available[0];
 
   const before = summary.all.count;
-  const res = await fetch(`${API}/api/inventory/withdraw`, {
+
+  // A request needs somewhere to deliver to, and the site refuses one without
+  // it, so the trade URL is set here rather than assumed to be there already.
+  const accountId = (BigInt(user.steamId64) - 76561197960265728n).toString();
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      tradeUrl: `https://steamcommunity.com/tradeoffer/new/?partner=${accountId}&token=aBcD1234`,
+    },
+  });
+
+  const res = await fetch(`${API}/api/withdrawals`, {
     method: 'POST',
     headers: auth,
     body: JSON.stringify({ inventoryItemIds: [target.id] }),
   });
   const out = await res.json();
-  assert(res.status === 201 || res.status === 200, `withdraw accepted with ${res.status}`);
-  assert(out.withdrawn === 1, 'one item withdrawn');
+  assert(res.status === 201 || res.status === 200, `withdrawal accepted with ${res.status}`);
+  assert(typeof out.id === 'string', 'a request was created');
 
   const row = await prisma.inventoryItem.findUnique({ where: { id: target.id } });
-  assert(row !== null, 'the row still exists after withdrawal');
-  assert(row.status === 'WITHDRAWN', `status is ${row.status}`);
+  assert(row !== null, 'the row still exists after the request');
+  // LOCKED rather than WITHDRAWN: nothing has been delivered yet. The worker
+  // moves it on only once the market says the seller handed the skin over.
+  assert(row.status === 'LOCKED', `status is ${row.status}`);
+  assert(row.withdrawalId === out.id, 'the item is attached to the request');
 
   const after = await get('/api/inventory/summary');
   assert(after.all.count === before, `total rows unchanged: ${before} -> ${after.all.count}`);
-  assert(
-    after.history.count === summary.history.count + 1,
-    'the item moved into the history tab',
-  );
+  assert(after.pending.count === summary.pending.count + 1, 'the item moved into the pending tab');
 
-  // The stub must not pay anything out — it is a withdrawal, not a sale.
+  // A withdrawal is not a sale - it must not pay anything out.
   const fresh = await prisma.user.findUnique({ where: { id: user.id } });
-  assert(fresh.balance === user.balance, 'withdrawing did not change the balance');
-}
+  assert(fresh.balance === user.balance, 'requesting a withdrawal did not change the balance');
 
-console.log('\n7. Withdrawing the same item twice is refused');
-{
-  const withdrawn = await prisma.inventoryItem.findFirst({
-    where: { userId: user.id, status: 'WITHDRAWN' },
-  });
-  const res = await fetch(`${API}/api/inventory/withdraw`, {
+  // Cancelling returns it, so the run leaves nothing locked behind it.
+  const cancelled = await fetch(`${API}/api/withdrawals/${out.id}/cancel`, {
     method: 'POST',
     headers: auth,
-    body: JSON.stringify({ inventoryItemIds: [withdrawn.id] }),
   });
-  assert(res.status === 400, `replaying the withdrawal refused with ${res.status}`);
+  assert(cancelled.status === 201 || cancelled.status === 200, 'the request was cancelled');
+  const returned = await prisma.inventoryItem.findUnique({ where: { id: target.id } });
+  assert(returned.status === 'AVAILABLE', `the item came back as ${returned.status}`);
+}
+
+console.log('\n7. Withdrawing a spent item is refused');
+{
+  const spent = await prisma.inventoryItem.findFirst({
+    where: { userId: user.id, status: { in: ['SOLD', 'WITHDRAWN'] } },
+  });
+  if (!spent) {
+    console.log('  skipped: nothing spent yet');
+  } else {
+    const res = await fetch(`${API}/api/withdrawals`, {
+      method: 'POST',
+      headers: auth,
+      body: JSON.stringify({ inventoryItemIds: [spent.id] }),
+    });
+    assert(res.status === 400, `withdrawing a spent item refused with ${res.status}`);
+  }
 }
 
 console.log('\n8. Selling everything respects the band it was pressed under');

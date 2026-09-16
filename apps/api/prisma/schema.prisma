@@ -62,12 +62,37 @@ enum BonusKind {
 }
 
 enum WithdrawalStatus {
-  PENDING // accepted, waiting for a bot
-  PROCESSING // a bot is sending the offer
-  SENT // offer sent, waiting for the player
-  COMPLETED // the player accepted
-  FAILED // failed, items returned
+  PENDING // accepted, waiting to be picked up
+  PROCESSING // being bought on the market, or a bot is building the offer
+  SENT // in flight: bought and awaiting the seller, or the offer is with the player
+  COMPLETED // every item reached the player
+  PARTIAL // some items were delivered and some were refunded
+  FAILED // nothing was delivered, items returned
   CANCELLED // cancelled by the player or an operator
+}
+
+/// How a request is filled.
+///
+/// Stamped on the request when it is made rather than read from the settings
+/// when it is processed: an operator flipping the channel must not leave the
+/// requests already in flight being polled by the wrong half of the worker.
+enum WithdrawalProvider {
+  MARKET // bought on market.csgo.com and delivered by the seller
+  BOTS // handed out of the Steam bot farm's own inventory
+}
+
+enum MarketAccountStatus {
+  OFFLINE // registered, not checked yet
+  ONLINE // answering and able to buy
+  DISABLED // taken out of rotation by an operator
+  ERROR // the market refused it: bad key, ban, wrong currency
+}
+
+enum MarketPurchaseStatus {
+  PENDING // row exists, nothing has been bought or paid for yet
+  BOUGHT // paid for; the seller has yet to deliver
+  DELIVERED // the item is in the player's Steam inventory
+  FAILED // never bought, or bought and then cancelled with a refund
 }
 
 enum BotStatus {
@@ -155,6 +180,8 @@ model Item {
   upgradeTargets  Upgrade[]          @relation("UpgradeTarget")
   contractRewards Contract[]         @relation("ContractRewardItem")
   bonusGrants     DailyBonus[]       @relation("BonusItem")
+  marketPurchases MarketPurchase[]
+  withdrawalLines WithdrawalItem[]
 
   @@index([rarity])
   @@index([isActive])
@@ -339,6 +366,14 @@ model InventoryItem {
   contractReward Contract? @relation("ContractReward", fields: [contractRewardId], references: [id], onDelete: SetNull)
 
   bonusReward DailyBonus? @relation("BonusReward", fields: [bonusRewardId], references: [id], onDelete: SetNull)
+
+  /// The market purchase that delivered this item, when it left through the
+  /// market channel rather than the bot farm.
+  marketPurchase MarketPurchase?
+
+  /// Every request this item has ever been part of, including the ones that
+  /// gave it back.
+  withdrawalLines WithdrawalItem[]
 
   @@index([userId, status])
   @@index([withdrawalId])
@@ -566,13 +601,16 @@ model Transaction {
 }
 
 model Withdrawal {
-  id     String           @id @default(uuid()) @db.Uuid
-  userId String           @db.Uuid
-  status WithdrawalStatus @default(PENDING)
+  id       String             @id @default(uuid()) @db.Uuid
+  userId   String             @db.Uuid
+  status   WithdrawalStatus   @default(PENDING)
+  provider WithdrawalProvider @default(MARKET)
 
   totalValue Int
   tradeUrl   String
 
+  /// Bot channel only: one offer carries the whole request. The market channel
+  /// buys each item separately, so its trade ids live on the purchases.
   botId        String? @db.Uuid
   tradeOfferId String?
 
@@ -584,13 +622,164 @@ model Withdrawal {
   sentAt      DateTime?
   completedAt DateTime?
 
-  user  User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bot   SteamBot?       @relation(fields: [botId], references: [id], onDelete: SetNull)
-  items InventoryItem[]
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bot  SteamBot?  @relation(fields: [botId], references: [id], onDelete: SetNull)
+
+  /// What the request asked for. Permanent.
+  items WithdrawalItem[]
+  /// The inventory rows still pointing at this request. Transient: an item that
+  /// is given back stops pointing here, which is exactly why it cannot double
+  /// as the history — see WithdrawalItem. Not the same as "locked": a delivered
+  /// item keeps pointing here too, it is simply WITHDRAWN rather than LOCKED.
+  inventoryItems InventoryItem[]
+  purchases MarketPurchase[]
 
   @@index([status, createdAt])
   @@index([userId, createdAt])
   @@map("withdrawals")
+}
+
+/// One line of a withdrawal request: an item the player asked to take out.
+///
+/// Written when the request is made and never rewritten. The obvious place to
+/// read this from is `InventoryItem.withdrawalId`, and that is the trap: that
+/// column says which request is holding an item *now*, and it is cleared the
+/// moment the item is handed back. A request that failed would therefore list
+/// nothing at all, and the player would be told "failed" with no mention of
+/// what had failed. History has to be a record, not a live pointer.
+model WithdrawalItem {
+  id              String @id @default(uuid()) @db.Uuid
+  withdrawalId    String @db.Uuid
+  inventoryItemId String @db.Uuid
+  itemId          String @db.Uuid
+
+  /// Denormalised so a line stays readable after the catalogue entry is
+  /// renamed, and priced as the site valued it when the request was made.
+  marketHashName String
+  price          Int
+
+  createdAt DateTime @default(now())
+
+  withdrawal    Withdrawal    @relation(fields: [withdrawalId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  item          Item          @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  /// One line per item per request; a repeat submission cannot duplicate one.
+  @@unique([withdrawalId, inventoryItemId])
+  @@index([withdrawalId])
+  @@map("withdrawal_items")
+}
+
+/// One skin bought on market.csgo.com for one withdrawn item.
+///
+/// A request for three items is three purchases from three different sellers,
+/// each delivered by its own Steam offer, each able to fail on its own. That is
+/// the price of holding no inventory, and it is why a withdrawal can end up
+/// PARTIAL: the site has to be able to say "two arrived, one was refunded"
+/// rather than pretending the request is atomic.
+model MarketPurchase {
+  id           String @id @default(uuid()) @db.Uuid
+  withdrawalId String @db.Uuid
+
+  /// Which market account paid for this, and the only one that can be asked
+  /// about it afterwards: `get-buy-info-by-custom-id` answers for the key that
+  /// made the purchase and for no other. Bound before the money moves, so a
+  /// lost reply is still traceable to the account that may have been charged.
+  /// Nullable only for rows made before the site had more than one account.
+  accountId String? @db.Uuid
+
+  /// Unique: an inventory item is bought once or not at all. This is the
+  /// constraint that stops a retried job paying for the same skin twice.
+  inventoryItemId String @unique @db.Uuid
+  itemId          String @db.Uuid
+
+  /// Denormalised: the purchase has to remain explicable after the catalogue
+  /// entry is renamed or deleted.
+  marketHashName String
+
+  status MarketPurchaseStatus @default(PENDING)
+
+  /// What the site was willing to pay, and what it actually paid — both in
+  /// settlement minor units, converted from whatever the market quoted.
+  maxPrice  Int
+  paidPrice Int?
+
+  /// The market's own trade stage, kept raw so support can read it against
+  /// their documentation rather than against our translation of it.
+  stage Int?
+
+  /// Their id for the purchase, and the Steam offer the seller ended up sending.
+  marketId     String?
+  tradeOfferId String?
+
+  failureReason String?
+  attempts      Int     @default(0)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  boughtAt    DateTime?
+  deliveredAt DateTime?
+
+  withdrawal    Withdrawal     @relation(fields: [withdrawalId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem  @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  item          Item           @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  account       MarketAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([withdrawalId])
+  @@index([status, createdAt])
+  /// The poller's hot read: everything still open, grouped by the key that can
+  /// ask about it.
+  @@index([accountId, status])
+  @@map("market_purchases")
+}
+
+/// One market.csgo.com account the site buys withdrawals through.
+///
+/// There is more than one for a reason that is not redundancy: the market
+/// deletes an API key that goes over five requests a second. A single key
+/// therefore caps the whole site's withdrawal throughput at a handful of
+/// requests per second, and every purchase costs several — a search, a buy, and
+/// a poll for as long as the seller takes. Accounts are how that ceiling is
+/// raised, and each one is throttled independently because the limit is
+/// counted per key.
+///
+/// The consequence to keep in mind is that accounts are not interchangeable
+/// after the fact: a purchase can only be asked about with the key that made
+/// it, and the money comes out of that account's balance.
+model MarketAccount {
+  id    String @id @default(uuid()) @db.Uuid
+  label String
+
+  /// AES-256-GCM under BOT_SECRETS_KEY, the same as the Steam bots' secrets,
+  /// and decrypted only inside the worker. The back office never sees a key:
+  /// it reads the snapshot below instead.
+  encryptedApiKey String
+
+  status MarketAccountStatus @default(OFFLINE)
+
+  /// Written by the worker so the panel can report on an account without
+  /// holding its key — the same arrangement the bot farm uses. Balance is in
+  /// settlement minor units.
+  balance       Int?
+  currency      String?
+  lastCheckedAt DateTime?
+  lastError     String?
+
+  /// The flags from `/test`, stored as sent so support can read them against
+  /// the market's own documentation rather than our translation of them.
+  checks Json?
+
+  /// How many requests this account has been asked for, for a rough read on
+  /// whether the pool is spreading load evenly.
+  requestCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  purchases MarketPurchase[]
+
+  @@index([status])
+  @@map("market_accounts")
 }
 
 model SteamBot {

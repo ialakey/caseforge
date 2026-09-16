@@ -1,7 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { translateError, verifyOpeningAsync, type ItemRarity } from '@caseforge/shared';
+import {
+  translateError,
+  verifyOpeningAsync,
+  type ItemRarity,
+  type TranslationKey,
+} from '@caseforge/shared';
 import { api, ApiError } from '../../lib/api';
 import { useAuth } from '../../lib/store';
 import { useSettings } from '../../lib/settings';
@@ -29,12 +34,57 @@ interface Opening {
   createdAt: string;
 }
 
+/**
+ * One withdrawal request, as the player is shown it.
+ *
+ * `purchases` is what makes the market channel legible: the request has one
+ * status, but three items bought from three sellers arrive at three different
+ * moments, and "two of three delivered" is only sayable per item.
+ */
+interface Withdrawal {
+  id: string;
+  status: string;
+  provider: string;
+  totalValue: number;
+  createdAt: string;
+  failureReason: string | null;
+  /** What the request was for. Survives a refund, unlike the lock on the item. */
+  items: Array<{ inventoryItemId: string; marketHashName: string; price: number }>;
+  purchases: Array<{
+    inventoryItemId: string;
+    marketHashName: string;
+    status: string;
+    tradeOfferId: string | null;
+  }>;
+}
+
+const WITHDRAWAL_TONE: Record<string, string> = {
+  PENDING: 'text-ink-muted',
+  PROCESSING: 'text-accent',
+  SENT: 'text-accent',
+  COMPLETED: 'text-positive',
+  PARTIAL: 'text-amber-400',
+  FAILED: 'text-negative',
+  CANCELLED: 'text-ink-faint',
+};
+
+/** Requests that will not move again, so a line without a purchase is settled. */
+const FINISHED = new Set(['COMPLETED', 'PARTIAL', 'FAILED', 'CANCELLED']);
+
+const PURCHASE_TONE: Record<string, string> = {
+  PENDING: 'text-ink-faint',
+  BOUGHT: 'text-accent',
+  DELIVERED: 'text-positive',
+  FAILED: 'text-negative',
+};
+
 export default function ProfilePage() {
   const { user, loadUser } = useAuth();
   const { locale, t } = useSettings();
 
   const [seeds, setSeeds] = useState<Seeds | null>(null);
   const [openings, setOpenings] = useState<Opening[]>([]);
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [tradeUrlDraft, setTradeUrlDraft] = useState('');
@@ -45,12 +95,14 @@ export default function ProfilePage() {
 
   const reload = useCallback(async () => {
     try {
-      const [sd, hist] = await Promise.all([
+      const [sd, hist, requests] = await Promise.all([
         api<Seeds>('/api/me/seeds'),
         api<{ items: Opening[] }>('/api/me/openings?page=1&perPage=20'),
+        api<Withdrawal[]>('/api/withdrawals'),
       ]);
       setSeeds(sd);
       setOpenings(hist.items);
+      setWithdrawals(requests);
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return;
       setError(t('profile.loadFailed'));
@@ -114,6 +166,22 @@ export default function ProfilePage() {
       reportError(err, 'profile.tradeUrlFailed');
     } finally {
       setTradeUrlBusy(false);
+    }
+  }
+
+  /**
+   * Cancelling is only offered while the request is still queued. Once it is
+   * being filled the site has either sent a trade offer or spent money on a
+   * skin that is on its way, and neither can be taken back from here.
+   */
+  async function cancelWithdrawal(id: string): Promise<void> {
+    setError(null);
+    setNotice(null);
+    try {
+      await api(`/api/withdrawals/${id}/cancel`, { method: 'POST' });
+      await reload();
+    } catch (err) {
+      reportError(err, 'profile.withdrawalCancelFailed');
     }
   }
 
@@ -182,6 +250,79 @@ export default function ProfilePage() {
           </button>
         </div>
         {user.tradeUrl && <p className="text-xs text-positive">{t('profile.tradeUrlLinked')}</p>}
+      </section>
+
+      <section className="cf-panel overflow-hidden">
+        <h2 className="border-b border-edge-subtle px-5 py-4 font-medium">
+          {t('profile.withdrawals')}
+        </h2>
+
+        {withdrawals.length === 0 ? (
+          <p className="px-5 py-6 text-sm text-ink-faint">{t('profile.withdrawalsEmpty')}</p>
+        ) : (
+          <ul className="divide-y divide-edge-subtle/60">
+            {withdrawals.map((w) => {
+              // Purchases are keyed by the inventory item, so each requested
+              // item can say where it is rather than the request speaking for
+              // all of them at once.
+              const byItem = new Map(w.purchases.map((p) => [p.inventoryItemId, p]));
+
+              return (
+                <li key={w.id} className="px-5 py-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <span className={`text-sm font-medium ${WITHDRAWAL_TONE[w.status] ?? ''}`}>
+                      {t(`withdrawal.${w.status}` as TranslationKey)}
+                    </span>
+                    <span className="text-xs text-ink-faint">
+                      {w.createdAt.replace('T', ' ').slice(0, 16)}
+                    </span>
+                  </div>
+
+                  <ul className="mt-2 space-y-1">
+                    {w.items.map((line) => {
+                      const purchase = byItem.get(line.inventoryItemId);
+                      // A finished request that never got as far as buying has
+                      // no purchase for the line; its own status is the answer.
+                      const state =
+                        purchase?.status ?? (FINISHED.has(w.status) ? 'FAILED' : 'PENDING');
+                      return (
+                        <li
+                          key={line.inventoryItemId}
+                          className="flex flex-wrap items-baseline justify-between gap-2 text-xs"
+                        >
+                          <span className="truncate text-ink-muted">{line.marketHashName}</span>
+                          <span className={PURCHASE_TONE[state]}>
+                            {t(`purchase.${state}` as TranslationKey)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  <div className="mt-2 flex flex-wrap items-baseline justify-between gap-2">
+                    <Money value={w.totalValue} className="text-xs text-accent" />
+                    {w.status === 'PENDING' && (
+                      <button
+                        onClick={() => void cancelWithdrawal(w.id)}
+                        className="text-xs text-ink-faint hover:text-negative"
+                      >
+                        {t('profile.withdrawalCancel')}
+                      </button>
+                    )}
+                  </div>
+
+                  {w.failureReason && (
+                    <p className="mt-1 text-xs text-negative">{w.failureReason}</p>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <p className="border-t border-edge-subtle px-5 py-3 text-xs text-ink-muted">
+          {t('profile.withdrawalsHint')}
+        </p>
       </section>
 
       <section className="cf-panel p-5">

@@ -2,6 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import type { TranslationKey } from '@caseforge/shared';
+import { useSettings } from '../../lib/settings';
 
 /**
  * Shared shell for the back office.
@@ -11,16 +13,18 @@ import { usePathname } from 'next/navigation';
  * lives in a layout so a new admin page is reachable by adding one entry here
  * rather than by remembering to link it from wherever the operator happens to be.
  */
-const TABS = [
-  { href: '/admin', label: 'Dashboard' },
-  { href: '/admin/cases', label: 'Cases' },
-  { href: '/admin/promo', label: 'Promo codes' },
-  { href: '/admin/bots', label: 'Bots' },
-  { href: '/admin/settings', label: 'Settings' },
+const TABS: Array<{ href: string; label: TranslationKey }> = [
+  { href: '/admin', label: 'admin.nav.dashboard' },
+  { href: '/admin/cases', label: 'admin.nav.cases' },
+  { href: '/admin/promo', label: 'admin.nav.promo' },
+  { href: '/admin/market', label: 'admin.nav.market' },
+  { href: '/admin/bots', label: 'admin.nav.bots' },
+  { href: '/admin/settings', label: 'admin.nav.settings' },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { t } = useSettings();
 
   return (
     <div className="space-y-6">
@@ -37,7 +41,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               data-active={active}
               className="cf-chip px-3 py-1.5"
             >
-              {tab.label}
+              {t(tab.label)}
             </Link>
           );
         })}

@@ -114,6 +114,38 @@ test('an operator-supplied wheel still tiles the ticket space', () => {
   assert.equal(validation.valid, true);
 });
 
+test('an enum setting offers exactly the values it accepts', () => {
+  // The panel renders the options list and the schema judges what comes back.
+  // If they disagree, the form offers a choice that saving then rejects.
+  const definitions = settingDefinitions();
+  for (const key of SETTING_KEYS) {
+    const def = definitions[key];
+    if (def.kind !== 'enum') {
+      assert.equal(def.options, null, `${key}: only an enum setting may carry options`);
+      continue;
+    }
+    assert.ok(def.options && def.options.length > 0, `${key}: an enum with no options`);
+    for (const option of def.options!) {
+      assert.equal(validateSetting(key, option).ok, true, `${key}: rejects its own option ${option}`);
+    }
+    assert.equal(validateSetting(key, 'not-an-option').ok, false, `${key}: accepts anything`);
+  }
+});
+
+test('the delivery channel is one of the two that exist', () => {
+  assert.equal(validateSetting('withdrawals.provider', 'MARKET').ok, true);
+  assert.equal(validateSetting('withdrawals.provider', 'BOTS').ok, true);
+  assert.equal(validateSetting('withdrawals.provider', 'market').ok, false);
+});
+
+test('the overpay ceiling cannot be opened all the way', () => {
+  // Basis points, so 10 000 is "pay up to double" — anything past that is a
+  // typo rather than a policy.
+  assert.equal(validateSetting('withdrawals.market.maxOverpayBps', -1).ok, false);
+  assert.equal(validateSetting('withdrawals.market.maxOverpayBps', 10_001).ok, false);
+  assert.equal(validateSetting('withdrawals.market.maxOverpayBps', 700).ok, true);
+});
+
 test('an unknown key is not silently accepted', () => {
   // The keys are a closed set; typos have to be caught rather than stored.
   assert.equal((SETTING_KEYS as string[]).includes('nonsense.key'), false);

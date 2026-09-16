@@ -77,6 +77,13 @@ const ru = {
   'deposit.failed': 'Не удалось пополнить баланс',
 
   'profile.steamProfile': 'Профиль в Steam',
+  'profile.withdrawals': 'Выводы',
+  'profile.withdrawalsEmpty': 'Вы ещё ничего не выводили.',
+  'profile.withdrawalsHint':
+    'Каждый предмет покупается на market.csgo.com отдельно, поэтому приходить они могут по одному.',
+  'profile.withdrawalItems': 'Предметы',
+  'profile.withdrawalCancel': 'Отменить',
+  'profile.withdrawalCancelFailed': 'Не удалось отменить заявку',
   'profile.tradeUrl': 'Трейд-ссылка Steam',
   'profile.tradeUrlHint':
     'Нужна для вывода предметов. Взять её можно в настройках приватности инвентаря Steam. Ссылка проверяется на принадлежность вашему аккаунту — чужая не подойдёт.',
@@ -174,8 +181,9 @@ const ru = {
   'inventory.emptyFiltered': 'Под этот фильтр ничего не подошло.',
   'inventory.sell': 'Продать',
   'inventory.withdraw': 'Вывести',
-  'inventory.withdrawStub': 'Заглушка: предмет помечается выведенным, трейд-оффер не отправляется.',
-  'inventory.withdrawn': 'Выведено предметов: {count}',
+  'inventory.withdrawHint':
+    'Скин купят на market.csgo.com и продавец пришлёт его прямо на вашу трейд-ссылку.',
+  'inventory.withdrawn': 'Заявка на вывод создана: {count} шт.',
   'inventory.withdrawFailed': 'Не удалось вывести предмет',
   'inventory.sellAll': 'Продать всё',
   'inventory.sellAllTitle': 'Продать всё?',
@@ -195,6 +203,19 @@ const ru = {
   'status.UPGRADED': 'В апгрейде',
   'status.CONTRACTED': 'В контракте',
 
+  'withdrawal.PENDING': 'В очереди',
+  'withdrawal.PROCESSING': 'Покупаем',
+  'withdrawal.SENT': 'Продавец отправляет',
+  'withdrawal.COMPLETED': 'Доставлено',
+  'withdrawal.PARTIAL': 'Доставлено частично',
+  'withdrawal.FAILED': 'Не удалось',
+  'withdrawal.CANCELLED': 'Отменено',
+
+  'purchase.PENDING': 'Ищем предложение',
+  'purchase.BOUGHT': 'Куплен, ждём продавца',
+  'purchase.DELIVERED': 'У вас в Steam',
+  'purchase.FAILED': 'Вернулся в инвентарь',
+
   'home.heroTitle': 'Открывай кейсы CS2 честно',
   'home.heroSubtitle':
     'Каждый ролл считается из пары сидов и проверяется вручную. Никаких скрытых шансов.',
@@ -204,7 +225,7 @@ const ru = {
   'home.statItems': 'Предметов',
   'home.statRtp': 'Средний RTP',
 
-  'footer.demo': 'Демо-сборка. Это не настоящая площадка: пополнение и вывод предметов заглушены.',
+  'footer.demo': 'Демо-сборка. Это не настоящая площадка: пополнение баланса — заглушка.',
   'footer.fairness': 'Все роллы проверяемы',
 
   'bonus.title': 'Ежедневный бонус',
@@ -283,6 +304,276 @@ const ru = {
   'error.DEPOSITS_DISABLED': 'Пополнение отключено',
   'error.VALIDATION_FAILED': 'Ошибка валидации',
   'error.STEAM_RATE_LIMITED': 'Steam временно ограничил запросы, повторите позже',
+
+  'verdict.rtp.overCap':
+    'RTP {percent}% — сайт будет работать в убыток. Потолок {cap}%: поднимите цену кейса или снизьте шансы на дорогие предметы.',
+  'verdict.rtp.aboveCorridor': 'RTP {percent}% — выше рабочего коридора, маржа на грани.',
+  'verdict.rtp.belowCorridor':
+    'RTP {percent}% — ниже рабочего коридора, такой кейс плохо продаётся.',
+  'verdict.rtp.inside': 'RTP {percent}% — внутри рабочего коридора.',
+  'verdict.balance.noItems': 'В кейсе нет предметов',
+  'verdict.balance.badPrice': 'Цена кейса должна быть больше нуля',
+  'verdict.balance.noPrices':
+    'У каждого предмета должна быть цена — сначала обновите цены из Steam',
+  'verdict.balance.outOfRange':
+    'При цене кейса {price} достижимый RTP — от {min}% до {max}% (предметы от {cheapest} до {priciest}). {direction}',
+  'verdict.balance.below': 'Цель ниже — поднимите цену кейса или добавьте предмет подешевле.',
+  'verdict.balance.above': 'Цель выше — снизьте цену кейса или добавьте предмет подороже.',
+
+  // --- Back office ---------------------------------------------------------
+  // The panel is staff-facing, but "staff" is whoever the operator hired, and
+  // a Russian-speaking support shift should not have to read an English CRM.
+  'admin.signInRequired': 'Войдите через Steam.',
+  'admin.noPermission': 'Недостаточно прав для CRM',
+  'admin.loading': 'Загрузка...',
+  'admin.loadFailed': 'Не удалось загрузить',
+  'admin.saving': 'Сохраняем...',
+  'admin.save': 'Сохранить',
+  'admin.saved': 'Сохранено',
+  'admin.saveFailed': 'Не удалось сохранить',
+  'admin.active': 'Активен',
+  'admin.inactive': 'Выключен',
+  'admin.on': 'Вкл',
+  'admin.off': 'Выкл',
+  'admin.enable': 'включить',
+  'admin.disable': 'выключить',
+
+  'admin.nav.dashboard': 'Сводка',
+  'admin.nav.cases': 'Кейсы',
+  'admin.nav.promo': 'Промокоды',
+  'admin.nav.market': 'Маркет',
+  'admin.nav.bots': 'Боты',
+  'admin.nav.settings': 'Настройки',
+
+  'admin.dashboard.title': 'CRM · последние 30 дней',
+  'admin.dashboard.ggrHint':
+    'GGR — это ставки минус выигрыши. Именно он показывает заработок, а не оборот.',
+  'admin.dashboard.ggr': 'GGR',
+  'admin.dashboard.wagered': 'Поставлено',
+  'admin.dashboard.won': 'Выиграно',
+  'admin.dashboard.actualRtp': 'Фактический RTP',
+  'admin.dashboard.openings': 'Открытий',
+  'admin.dashboard.newUsers': 'Новых игроков',
+  'admin.dashboard.activeUsers': 'Активных игроков',
+  'admin.dashboard.withdrawals': 'Выводы',
+  'admin.dashboard.perCase': 'Маржа по кейсам',
+  'admin.dashboard.case': 'Кейс',
+  'admin.dashboard.rtpColumn': 'RTP факт / план',
+  'admin.dashboard.empty': 'За этот период открытий не было.',
+  'admin.dashboard.rtpHint':
+    'Расхождение фактического и планового RTP на большой выборке означает, что либо сместились цены предметов, либо неверно разложены тикеты кейса.',
+
+  'admin.cases.title': 'Кейсы',
+  'admin.cases.name': 'Название',
+  'admin.cases.price': 'Цена',
+  'admin.cases.items': 'Предметов',
+  'admin.cases.rtp': 'RTP',
+  'admin.cases.status': 'Статус',
+  'admin.cases.syncPrices': 'Обновить цены из Steam',
+  'admin.cases.syncing': 'Обновляем...',
+  'admin.cases.syncFailed': 'Не удалось обновить цены',
+  'admin.cases.syncDone': 'Проверено предметов: {checked}, цен обновлено: {changed}',
+  'admin.cases.syncHint':
+    'Цены предметов плывут: кейс, собранный под 90% RTP, может уйти в убыток после скачка цены ножа. Синхронизация пересчитывает RTP всех активных кейсов.',
+  'admin.cases.empty': 'Кейсов пока нет.',
+  'admin.cases.newCase': 'Новый кейс',
+  'admin.cases.edit': 'Изменить',
+  'admin.cases.stateOn': 'активен',
+  'admin.cases.stateOff': 'выключен',
+  'admin.cases.loadFailed': 'Не удалось загрузить кейсы',
+
+  'admin.case.new': 'Новый кейс',
+  'admin.case.nameRu': 'Название (русское)',
+  'admin.case.nameEn': 'Название (английское)',
+  'admin.case.slug': 'Слаг (в адресе)',
+  'admin.case.price': 'Цена кейса',
+  'admin.case.image': 'Картинка кейса',
+  'admin.case.order': 'Порядок',
+  'admin.case.targetRtp': 'Целевой RTP, %',
+  'admin.case.saveCase': 'Сохранить кейс',
+  'admin.case.loadFailed': 'Не удалось загрузить кейс',
+  'admin.case.saveFailed': 'Не удалось сохранить кейс',
+  'admin.case.fillRequired': 'Заполните название, слаг и цену',
+  'admin.case.setPriceFirst': 'Сначала укажите цену кейса',
+  'admin.case.layoutFirst': 'Сначала разложите шансы — диапазоны должны покрыть всё поле',
+  'admin.case.layoutOdds': 'Разложить шансы — тикеты должны покрыть всё поле',
+  'admin.case.coverage': 'Покрытие тикетов: ',
+  'admin.case.currentRtp': 'Текущий RTP: ',
+  'admin.case.margin': 'Маржа сайта: ',
+  'admin.case.tickets': 'Тикеты',
+  'admin.case.chance': 'Шанс',
+  'admin.case.item': 'Предмет',
+  'admin.case.rarity': 'Редкость',
+  'admin.case.addFromSearch': 'Добавьте предметы через поиск ниже.',
+  'admin.case.searchSteam': 'Найти предметы в Steam',
+  'admin.case.search': 'Найти',
+  'admin.case.searching': 'Ищем...',
+  'admin.case.searchFailed': 'Поиск не удался',
+  'admin.case.adding': 'Добавляем...',
+  'admin.case.addFailed': 'Не удалось добавить предмет',
+  'admin.case.alreadyIn': 'Уже в кейсе',
+  'admin.case.alreadyInCase': 'Этот предмет уже в кейсе',
+  'admin.case.notImported': 'Предмет не импортировался',
+  'admin.case.noPrice': 'без цены',
+  'admin.case.someNoPrice': 'У некоторых предметов нет цены',
+  'admin.case.noImage': 'Ни у одного предмета нет картинки',
+  'admin.case.pricierLower': 'Более дорогим предметам достались меньшие шансы.',
+  'admin.case.balance': 'Разложить',
+  'admin.case.title': 'Кейс: {name}',
+  'admin.case.imageTitle': 'Картинка кейса',
+  'admin.case.imageHint':
+    'Показывается на витрине и в этом списке. Если своей картинки нет, возьмите изображение самого дорогого предмета — так кейс узнают по топовому скину.',
+  'admin.case.useTopImage': 'Взять картинку топового предмета',
+  'admin.case.imageFrom': 'Картинка взята из «{name}»',
+  'admin.case.balanceTitle': 'Раскладка шансов',
+  'admin.case.balanceHint':
+    'Шансы решаются так, чтобы ожидаемый возврат совпал с целевым RTP: чем дороже предмет, тем он реже. Рабочий коридор — {min}–{max}%. Сервер откажется сохранить кейс с возвратом выше 98%: со временем такой кейс работает в убыток.',
+  'admin.case.solveOdds': 'Разложить шансы',
+  'admin.case.fitPrice': 'Подогнать цену под RTP',
+  'admin.case.oddsDone': 'Шансы разложены, фактический RTP {rtp}%. ',
+  'admin.case.priceFitted': 'Цена подогнана под RTP {rtp}%.',
+  'admin.case.unconfirmed':
+    'Цена не подтверждена Steam: {names}. RTP считается по этим значениям как есть — проверьте вручную.',
+  'admin.case.noPriceList': 'Без цены: {names}. Обновите цены из Steam.',
+  'admin.case.contents': 'Содержимое кейса ({count})',
+  'admin.case.notLaidOut': 'не разложен',
+  'admin.case.searchHint':
+    'Steam ограничивает частоту запросов, поэтому результаты кэшируются на час, а цена в расчётной валюте запрашивается отдельно при добавлении предмета.',
+  'admin.case.listings': 'предложений',
+  'admin.case.add': 'Добавить',
+  'admin.case.rtpAboveCap': 'RTP выше допустимого потолка',
+
+  'admin.promo.title': 'Промокоды',
+  'admin.promo.create': 'Создать или изменить',
+  'admin.promo.code': 'Код',
+  'admin.promo.bonus': 'Бонус',
+  'admin.promo.percent': 'Процент',
+  'admin.promo.fixed': 'Фикс',
+  'admin.promo.valueBps': 'Значение, б.п.',
+  'admin.promo.valueMinor': 'Значение, копейки',
+  'admin.promo.minDeposit': 'Мин. пополнение',
+  'admin.promo.minDepositMinor': 'Мин. пополнение, копейки',
+  'admin.promo.maxBonusMinor': 'Макс. бонус, копейки',
+  'admin.promo.perUser': 'На игрока',
+  'admin.promo.usesPerUser': 'Использований на игрока',
+  'admin.promo.totalUses': 'Всего использований',
+  'admin.promo.used': 'Использован',
+  'admin.promo.state': 'Состояние',
+  'admin.promo.expires': 'Истекает',
+  'admin.promo.saveCode': 'Сохранить код',
+  'admin.promo.loadFailed': 'Не удалось загрузить промокоды',
+  'admin.promo.deactivateFailed': 'Не удалось выключить',
+  'admin.promo.createHint':
+    'Уже существующий код перезаписывается, счётчик использований сохраняется. Проценты задаются в базисных пунктах: 1000 = 10%. Деньги — в копейках.',
+  'admin.promo.kind': 'Тип',
+  'admin.promo.savedCode': 'Сохранён {code}',
+  'admin.promo.existing': 'Существующие коды',
+  'admin.promo.empty': 'Промокодов пока нет.',
+  'admin.promo.noCap': 'без потолка',
+  'admin.promo.unlimited': 'без ограничений',
+  'admin.promo.upTo': 'до',
+  'admin.promo.stateOn': 'активен',
+  'admin.promo.stateOff': 'выкл',
+  'admin.promo.deactivate': 'выключить',
+
+  'admin.bots.title': 'Боты',
+  'admin.bots.farm': 'Ферма',
+  'admin.bots.bot': 'Бот',
+  'admin.bots.steamId': 'SteamID64',
+  'admin.bots.status': 'Статус',
+  'admin.bots.inventory': 'Инвентарь',
+  'admin.bots.lastOnline': 'Был в сети',
+  'admin.bots.lastError': 'Последняя ошибка',
+  'admin.bots.empty': 'Ботов не заведено. Добавьте через',
+  'admin.bots.loadFailed': 'Не удалось загрузить ботов',
+  'admin.bots.statusFailed': 'Не удалось сменить статус',
+
+  'admin.market.title': 'Маркет',
+  'admin.market.account': 'Аккаунт market.csgo.com',
+  'admin.market.reachable': 'отвечает',
+  'admin.market.unreachable': 'не отвечает',
+  'admin.market.noKey': 'нет ключа',
+  'admin.market.balance': 'Баланс',
+  'admin.market.unknownCurrency': 'валюта неизвестна',
+  'admin.market.checks': 'Проверки аккаунта',
+  'admin.market.checkOnline': 'Аккаунт в сети',
+  'admin.market.checkTradeLink': 'Трейд-ссылка указана',
+  'admin.market.checkTrades': 'Обмены доступны',
+  'admin.market.checkNoBan': 'Нет бана за недоставку',
+  'admin.market.checkSteamKey': 'Ключ Steam API',
+  'admin.market.cost': 'Во что обошлась доставка',
+  'admin.market.itemsDelivered': 'Предметов доставлено',
+  'admin.market.paidToSellers': 'Заплачено продавцам',
+  'admin.market.ceilingAuthorised': 'Разрешённый потолок',
+  'admin.market.costHint':
+    'Разница между ними — запас, который потолок переплаты так и не понадобился. Если они сходятся, потолок работает вплотную и маржа на выводе тает.',
+  'admin.market.stuckTitle': 'Оплачено, но не доставлено дольше {minutes} мин',
+  'admin.market.stuckHint':
+    'Их никогда не отменяют автоматически: деньги потрачены, и продавец ещё может отдать предмет. Разбирайтесь через поддержку market.csgo.com по id обмена.',
+  'admin.market.recent': 'Последние покупки',
+  'admin.market.colItem': 'Предмет',
+  'admin.market.colPlayer': 'Игрок',
+  'admin.market.colStatus': 'Статус',
+  'admin.market.colPaid': 'Уплачено / потолок',
+  'admin.market.colTrade': 'Обмен',
+  'admin.market.colBought': 'Куплен',
+  'admin.market.colWhy': 'Причина',
+  'admin.market.empty': 'Пока ничего не куплено.',
+  'admin.market.loadFailed': 'Не удалось загрузить канал маркета',
+  'admin.market.accounts': 'Аккаунты',
+  'admin.market.accountsHint': 'Маркет удаляет ключ, который превысил пять запросов в секунду, поэтому один ключ ограничивает скорость выводов всего сайта. Каждый аккаунт троттлится отдельно — лимит считается по ключу.',
+  'admin.market.accountsEmpty': 'Аккаунтов не заведено. Добавьте через',
+  'admin.market.colAccount': 'Аккаунт',
+  'admin.market.colBalance': 'Баланс',
+  'admin.market.colChecks': 'Проверки',
+  'admin.market.colRequests': 'Запросов',
+  'admin.market.colChecked': 'Проверен',
+  'admin.market.spendable': 'Доступно к трате',
+  'admin.market.spendableHint': 'Сумма по аккаунтам, которые сейчас в строю. Покупка дороже остатка любого отдельного аккаунта не пройдёт, даже если сумма её покрывает.',
+  'admin.market.colPurchaseAccount': 'Аккаунт',
+  'admin.market.statusFailed': 'Не удалось сменить статус аккаунта',
+  'admin.market.neverChecked': 'ни разу',
+
+  'admin.settings.title': 'Настройки',
+  'admin.settings.loadFailed': 'Не удалось загрузить настройки',
+  'admin.settings.group.site': 'Сайт',
+  'admin.settings.group.deposits': 'Пополнения',
+  'admin.settings.group.economy': 'Экономика',
+  'admin.settings.group.limits': 'Лимиты',
+  'admin.settings.group.bonus': 'Ежедневный бонус',
+  'admin.settings.group.withdrawals': 'Выводы',
+
+  'setting.site.maintenance.label': 'Режим обслуживания',
+  'setting.site.maintenance.hint':
+    'Выключает открытие кейсов, апгрейды, контракты и колесо. Вход продолжает работать.',
+  'setting.deposits.enabled.label': 'Пополнения включены',
+  'setting.deposits.enabled.hint': 'Заглушка начисления, пока не подключён платёжный провайдер.',
+  'setting.deposits.min.label': 'Минимальное пополнение',
+  'setting.deposits.max.label': 'Максимальное пополнение',
+  'setting.economy.sellFeeBps.label': 'Комиссия за обратную продажу, б.п.',
+  'setting.economy.sellFeeBps.hint':
+    '100 б.п. = 1%. Удерживается, когда игрок продаёт предмет обратно сайту.',
+  'setting.limits.openPerWindow.label': 'Открытий кейсов за окно',
+  'setting.limits.openPerWindow.hint':
+    'Считается в кейсах, а не в запросах: одно нажатие «×10» — это десять открытий.',
+  'setting.limits.openWindowSec.label': 'Окно рейт-лимита, секунды',
+  'setting.bonus.enabled.label': 'Ежедневное колесо включено',
+  'setting.bonus.cooldownHours.label': 'Часов между прокрутами',
+  'setting.bonus.wheel.label': 'Сектора колеса',
+  'setting.bonus.wheel.hint':
+    'Доли должны складываться в 1. Диапазоны тикетов пересчитываются при сохранении.',
+  'setting.withdrawals.provider.label': 'Канал доставки',
+  'setting.withdrawals.provider.hint':
+    'MARKET покупает каждый скин на market.csgo.com, и продавец отправляет его напрямую игроку. BOTS выдаёт предметы, которые уже лежат у бота фермы. Канал проставляется на заявке в момент её создания, поэтому переключение не подвешивает то, что уже в работе.',
+  'setting.withdrawals.market.maxOverpayBps.label': 'Максимальная переплата, б.п.',
+  'setting.withdrawals.market.maxOverpayBps.hint':
+    'Насколько выше начисленной игроку цены может уйти покупка. 700 б.п. = 7%. Выше предмет не покупается и возвращается в инвентарь.',
+  'setting.withdrawals.market.minSellerChance.label': 'Минимальный процент доставки продавца',
+  'setting.withdrawals.market.minSellerChance.hint':
+    'Продавцы, которые доставляют реже, пропускаются, даже если они дешевле всех.',
+  'setting.withdrawals.market.stuckAfterMin.label': 'Помечать недоставленную покупку через, минут',
+  'setting.withdrawals.market.stuckAfterMin.hint':
+    'Только помечает её для оператора. Оплаченная покупка никогда не списывается по таймеру — деньги уже потрачены, и маркет ещё может доставить.',
 } as const;
 
 export type TranslationKey = keyof typeof ru;
@@ -344,6 +635,13 @@ const en: Record<TranslationKey, string> = {
   'deposit.failed': 'Could not top up the balance',
 
   'profile.steamProfile': 'Steam profile',
+  'profile.withdrawals': 'Withdrawals',
+  'profile.withdrawalsEmpty': 'You have not withdrawn anything yet.',
+  'profile.withdrawalsHint':
+    'Each item is bought separately on market.csgo.com, so they can arrive one at a time.',
+  'profile.withdrawalItems': 'Items',
+  'profile.withdrawalCancel': 'Cancel',
+  'profile.withdrawalCancelFailed': 'Could not cancel the request',
   'profile.tradeUrl': 'Steam trade URL',
   'profile.tradeUrlHint':
     'Required to withdraw items. Find it in your Steam inventory privacy settings. The link is checked against your account — someone else’s will not work.',
@@ -441,8 +739,9 @@ const en: Record<TranslationKey, string> = {
   'inventory.emptyFiltered': 'Nothing matches this filter.',
   'inventory.sell': 'Sell',
   'inventory.withdraw': 'Withdraw',
-  'inventory.withdrawStub': 'Placeholder: the item is marked withdrawn, no trade offer is sent.',
-  'inventory.withdrawn': 'Withdrawn {count} item(s)',
+  'inventory.withdrawHint':
+    'The skin is bought on market.csgo.com and its seller sends it straight to your trade link.',
+  'inventory.withdrawn': 'Withdrawal requested for {count} item(s)',
   'inventory.withdrawFailed': 'Could not withdraw the item',
   'inventory.sellAll': 'Sell everything',
   'inventory.sellAllTitle': 'Sell everything?',
@@ -462,6 +761,19 @@ const en: Record<TranslationKey, string> = {
   'status.UPGRADED': 'Upgraded',
   'status.CONTRACTED': 'Contracted',
 
+  'withdrawal.PENDING': 'Queued',
+  'withdrawal.PROCESSING': 'Buying',
+  'withdrawal.SENT': 'Seller is sending it',
+  'withdrawal.COMPLETED': 'Delivered',
+  'withdrawal.PARTIAL': 'Partly delivered',
+  'withdrawal.FAILED': 'Failed',
+  'withdrawal.CANCELLED': 'Cancelled',
+
+  'purchase.PENDING': 'Finding an offer',
+  'purchase.BOUGHT': 'Bought, waiting on the seller',
+  'purchase.DELIVERED': 'In your Steam inventory',
+  'purchase.FAILED': 'Returned to your inventory',
+
   'home.heroTitle': 'Open CS2 cases, provably fair',
   'home.heroSubtitle':
     'Every roll is derived from a seed pair and can be checked by hand. No hidden odds.',
@@ -471,7 +783,7 @@ const en: Record<TranslationKey, string> = {
   'home.statItems': 'Items',
   'home.statRtp': 'Average RTP',
 
-  'footer.demo': 'Demo build. Not a real marketplace: top-ups and item withdrawals are stubbed.',
+  'footer.demo': 'Demo build. Not a real marketplace: the balance top-up is a stub.',
   'footer.fairness': 'Every roll is verifiable',
 
   'bonus.title': 'Daily bonus',
@@ -550,6 +862,272 @@ const en: Record<TranslationKey, string> = {
   'error.DEPOSITS_DISABLED': 'Top-ups are disabled',
   'error.VALIDATION_FAILED': 'Validation failed',
   'error.STEAM_RATE_LIMITED': 'Steam is rate-limiting requests, try again later',
+
+  'verdict.rtp.overCap':
+    'RTP {percent}% — the site loses money over time. The cap is {cap}%: raise the case price or lower the odds on expensive items.',
+  'verdict.rtp.aboveCorridor':
+    'RTP {percent}% — above the working corridor, the margin is razor thin.',
+  'verdict.rtp.belowCorridor':
+    'RTP {percent}% — below the working corridor, such a case sells poorly.',
+  'verdict.rtp.inside': 'RTP {percent}% — inside the working corridor.',
+  'verdict.balance.noItems': 'The case has no items',
+  'verdict.balance.badPrice': 'Case price must be greater than zero',
+  'verdict.balance.noPrices': 'Every item needs a price — sync prices from Steam first',
+  'verdict.balance.outOfRange':
+    'At a case price of {price} the achievable RTP is {min}% to {max}% (items from {cheapest} to {priciest}). {direction}',
+  'verdict.balance.below': 'The target is below that — raise the case price or add a cheaper item.',
+  'verdict.balance.above': 'The target is above that — lower the case price or add a pricier item.',
+
+  // --- Back office ---------------------------------------------------------
+  'admin.signInRequired': 'Sign in through Steam.',
+  'admin.noPermission': 'Insufficient permissions for the CRM',
+  'admin.loading': 'Loading...',
+  'admin.loadFailed': 'Failed to load',
+  'admin.saving': 'Saving...',
+  'admin.save': 'Save',
+  'admin.saved': 'Saved',
+  'admin.saveFailed': 'Save failed',
+  'admin.active': 'Active',
+  'admin.inactive': 'Inactive',
+  'admin.on': 'On',
+  'admin.off': 'Off',
+  'admin.enable': 'enable',
+  'admin.disable': 'disable',
+
+  'admin.nav.dashboard': 'Dashboard',
+  'admin.nav.cases': 'Cases',
+  'admin.nav.promo': 'Promo codes',
+  'admin.nav.market': 'Market',
+  'admin.nav.bots': 'Bots',
+  'admin.nav.settings': 'Settings',
+
+  'admin.dashboard.title': 'CRM · last 30 days',
+  'admin.dashboard.ggrHint': 'GGR is wagers minus wins. That is what shows earnings, not turnover.',
+  'admin.dashboard.ggr': 'GGR',
+  'admin.dashboard.wagered': 'Wagered',
+  'admin.dashboard.won': 'Won',
+  'admin.dashboard.actualRtp': 'Actual RTP',
+  'admin.dashboard.openings': 'Openings',
+  'admin.dashboard.newUsers': 'New players',
+  'admin.dashboard.activeUsers': 'Active players',
+  'admin.dashboard.withdrawals': 'Withdrawals',
+  'admin.dashboard.perCase': 'Per-case margin',
+  'admin.dashboard.case': 'Case',
+  'admin.dashboard.rtpColumn': 'RTP actual / planned',
+  'admin.dashboard.empty': 'No openings in this period.',
+  'admin.dashboard.rtpHint':
+    'A gap between actual and planned RTP over a large sample means either item prices have shifted or the case ticket ranges are wrong.',
+
+  'admin.cases.title': 'Cases',
+  'admin.cases.name': 'Name',
+  'admin.cases.price': 'Price',
+  'admin.cases.items': 'Items',
+  'admin.cases.rtp': 'RTP',
+  'admin.cases.status': 'Status',
+  'admin.cases.syncPrices': 'Refresh prices from Steam',
+  'admin.cases.syncing': 'Synchronising...',
+  'admin.cases.syncFailed': 'Synchronisation failed',
+  'admin.cases.syncDone': 'Items checked: {checked}, prices updated: {changed}',
+  'admin.cases.syncHint':
+    "Item prices drift: a case assembled at 90% RTP can go into loss after a knife's price jumps. Synchronisation recomputes the RTP of every active case.",
+  'admin.cases.empty': 'No cases yet.',
+  'admin.cases.newCase': 'New case',
+  'admin.cases.edit': 'Edit',
+  'admin.cases.stateOn': 'active',
+  'admin.cases.stateOff': 'disabled',
+  'admin.cases.loadFailed': 'Could not load the cases',
+
+  'admin.case.new': 'New case',
+  'admin.case.nameRu': 'Name (Russian)',
+  'admin.case.nameEn': 'Name (English)',
+  'admin.case.slug': 'Slug (in the URL)',
+  'admin.case.price': 'Case price',
+  'admin.case.image': 'Case image',
+  'admin.case.order': 'Order',
+  'admin.case.targetRtp': 'Target RTP, %',
+  'admin.case.saveCase': 'Save case',
+  'admin.case.loadFailed': 'Could not load the case',
+  'admin.case.saveFailed': 'Could not save the case',
+  'admin.case.fillRequired': 'Fill in the name, slug and price',
+  'admin.case.setPriceFirst': 'Set the case price first',
+  'admin.case.layoutFirst': 'Lay out the odds first — the ranges must cover the whole space',
+  'admin.case.layoutOdds': 'Lay out the odds — tickets must cover the whole space',
+  'admin.case.coverage': 'Ticket coverage: ',
+  'admin.case.currentRtp': 'Current RTP: ',
+  'admin.case.margin': 'Site margin: ',
+  'admin.case.tickets': 'Tickets',
+  'admin.case.chance': 'Chance',
+  'admin.case.item': 'Item',
+  'admin.case.rarity': 'Rarity',
+  'admin.case.addFromSearch': 'Add items from the search below.',
+  'admin.case.searchSteam': 'Search Steam for items',
+  'admin.case.search': 'Search',
+  'admin.case.searching': 'Searching...',
+  'admin.case.searchFailed': 'Search failed',
+  'admin.case.adding': 'Adding...',
+  'admin.case.addFailed': 'Could not add the item',
+  'admin.case.alreadyIn': 'Already in the case',
+  'admin.case.alreadyInCase': 'That item is already in the case',
+  'admin.case.notImported': 'The item was not imported',
+  'admin.case.noPrice': 'no price',
+  'admin.case.someNoPrice': 'Some items have no price',
+  'admin.case.noImage': 'None of the items has an image',
+  'admin.case.pricierLower': 'Pricier items received lower odds.',
+  'admin.case.balance': 'Balance',
+  'admin.case.title': 'Case: {name}',
+  'admin.case.imageTitle': 'Case image',
+  'admin.case.imageHint':
+    'Shown on the showcase and in this list. With no image of its own, borrow the picture of the priciest item in the case — that way the case is recognised by its top skin.',
+  'admin.case.useTopImage': "Use the top item's image",
+  'admin.case.imageFrom': 'Image taken from "{name}"',
+  'admin.case.balanceTitle': 'Balance',
+  'admin.case.balanceHint':
+    'The odds are solved so the expected return matches the target RTP: the pricier the item, the rarer it is. The working corridor is {min}–{max}%. The server refuses to save a case returning more than 98%: over time such a case runs at a loss.',
+  'admin.case.solveOdds': 'Solve the odds',
+  'admin.case.fitPrice': 'Fit price to RTP',
+  'admin.case.oddsDone': 'Odds laid out, actual RTP {rtp}%. ',
+  'admin.case.priceFitted': 'Price fitted to an RTP of {rtp}%.',
+  'admin.case.unconfirmed':
+    'Price not confirmed by Steam: {names}. The RTP uses those values as they are — check them by hand.',
+  'admin.case.noPriceList': 'No price: {names}. Refresh prices from Steam.',
+  'admin.case.contents': 'Case contents ({count})',
+  'admin.case.notLaidOut': 'not laid out',
+  'admin.case.searchHint':
+    'Steam throttles requests, so results are cached for an hour and the settlement-currency price is fetched separately when an item is added.',
+  'admin.case.listings': 'listings',
+  'admin.case.add': 'Add',
+  'admin.case.rtpAboveCap': 'RTP is above the allowed cap',
+
+  'admin.promo.title': 'Promo codes',
+  'admin.promo.create': 'Create or edit',
+  'admin.promo.code': 'Code',
+  'admin.promo.bonus': 'Bonus',
+  'admin.promo.percent': 'Percent',
+  'admin.promo.fixed': 'Fixed',
+  'admin.promo.valueBps': 'Value, bps',
+  'admin.promo.valueMinor': 'Value, minor',
+  'admin.promo.minDeposit': 'Min top-up',
+  'admin.promo.minDepositMinor': 'Min top-up, minor',
+  'admin.promo.maxBonusMinor': 'Max bonus, minor',
+  'admin.promo.perUser': 'Per player',
+  'admin.promo.usesPerUser': 'Uses per player',
+  'admin.promo.totalUses': 'Total uses',
+  'admin.promo.used': 'Used',
+  'admin.promo.state': 'State',
+  'admin.promo.expires': 'Expires',
+  'admin.promo.saveCode': 'Save code',
+  'admin.promo.loadFailed': 'Could not load promo codes',
+  'admin.promo.deactivateFailed': 'Could not deactivate',
+  'admin.promo.createHint':
+    'A code that already exists is overwritten, keeping its redemption count. Percentage values are basis points: 1000 = 10%. Money is in minor units.',
+  'admin.promo.kind': 'Kind',
+  'admin.promo.savedCode': 'Saved {code}',
+  'admin.promo.existing': 'Existing codes',
+  'admin.promo.empty': 'No promo codes yet.',
+  'admin.promo.noCap': 'no cap',
+  'admin.promo.unlimited': 'unlimited',
+  'admin.promo.upTo': 'up to',
+  'admin.promo.stateOn': 'active',
+  'admin.promo.stateOff': 'off',
+  'admin.promo.deactivate': 'deactivate',
+
+  'admin.bots.title': 'Bots',
+  'admin.bots.farm': 'Farm',
+  'admin.bots.bot': 'Bot',
+  'admin.bots.steamId': 'SteamID64',
+  'admin.bots.status': 'Status',
+  'admin.bots.inventory': 'Inventory',
+  'admin.bots.lastOnline': 'Last online',
+  'admin.bots.lastError': 'Last error',
+  'admin.bots.empty': 'No bots registered. Add one with',
+  'admin.bots.loadFailed': 'Could not load bots',
+  'admin.bots.statusFailed': 'Could not change the status',
+
+  'admin.market.title': 'Market',
+  'admin.market.account': 'market.csgo.com account',
+  'admin.market.reachable': 'reachable',
+  'admin.market.unreachable': 'unreachable',
+  'admin.market.noKey': 'no API key',
+  'admin.market.balance': 'Balance',
+  'admin.market.unknownCurrency': 'unknown currency',
+  'admin.market.checks': 'Account checks',
+  'admin.market.checkOnline': 'Account online',
+  'admin.market.checkTradeLink': 'Trade link set',
+  'admin.market.checkTrades': 'Trades available',
+  'admin.market.checkNoBan': 'No delivery ban',
+  'admin.market.checkSteamKey': 'Steam API key',
+  'admin.market.cost': 'What delivery has cost',
+  'admin.market.itemsDelivered': 'Items delivered',
+  'admin.market.paidToSellers': 'Paid to sellers',
+  'admin.market.ceilingAuthorised': 'Ceiling authorised',
+  'admin.market.costHint':
+    'The gap between the two is the headroom the overpay ceiling never had to use. If they converge, the ceiling is doing the work and the margin per withdrawal is thinning.',
+  'admin.market.stuckTitle': 'Paid for, not delivered after {minutes}m',
+  'admin.market.stuckHint':
+    'These are never failed automatically — the money is spent and the seller may still deliver. Chase them through market.csgo.com support with the trade id.',
+  'admin.market.recent': 'Recent purchases',
+  'admin.market.colItem': 'Item',
+  'admin.market.colPlayer': 'Player',
+  'admin.market.colStatus': 'Status',
+  'admin.market.colPaid': 'Paid / ceiling',
+  'admin.market.colTrade': 'Trade',
+  'admin.market.colBought': 'Bought',
+  'admin.market.colWhy': 'Why',
+  'admin.market.empty': 'Nothing bought yet.',
+  'admin.market.loadFailed': 'Could not load the market channel',
+  'admin.market.accounts': 'Accounts',
+  'admin.market.accountsHint': 'The market deletes a key that goes over five requests a second, so a single key caps how fast the whole site can hand items out. Each account is throttled on its own, because the limit is counted per key.',
+  'admin.market.accountsEmpty': 'No accounts registered. Add one with',
+  'admin.market.colAccount': 'Account',
+  'admin.market.colBalance': 'Balance',
+  'admin.market.colChecks': 'Checks',
+  'admin.market.colRequests': 'Requests',
+  'admin.market.colChecked': 'Checked',
+  'admin.market.spendable': 'Spendable',
+  'admin.market.spendableHint': 'Summed over the accounts currently in rotation. A purchase larger than any single account\u2019s balance will still be refused, even when the total covers it.',
+  'admin.market.colPurchaseAccount': 'Account',
+  'admin.market.statusFailed': 'Could not change the account status',
+  'admin.market.neverChecked': 'never',
+
+  'admin.settings.title': 'Settings',
+  'admin.settings.loadFailed': 'Could not load settings',
+  'admin.settings.group.site': 'Site',
+  'admin.settings.group.deposits': 'Top-ups',
+  'admin.settings.group.economy': 'Economy',
+  'admin.settings.group.limits': 'Limits',
+  'admin.settings.group.bonus': 'Daily bonus',
+  'admin.settings.group.withdrawals': 'Withdrawals',
+
+  'setting.site.maintenance.label': 'Maintenance mode',
+  'setting.site.maintenance.hint':
+    'Turns off opening, upgrades, contracts and the wheel. Sign-in keeps working.',
+  'setting.deposits.enabled.label': 'Top-ups enabled',
+  'setting.deposits.enabled.hint': 'The stub credit, until a payment provider is wired in.',
+  'setting.deposits.min.label': 'Minimum top-up',
+  'setting.deposits.max.label': 'Maximum top-up',
+  'setting.economy.sellFeeBps.label': 'Sell-back fee, basis points',
+  'setting.economy.sellFeeBps.hint':
+    '100 bps = 1%. Taken when a player sells an item back to the site.',
+  'setting.limits.openPerWindow.label': 'Case openings per window',
+  'setting.limits.openPerWindow.hint':
+    'Counted in cases, not requests: one "x10" press is ten openings.',
+  'setting.limits.openWindowSec.label': 'Rate-limit window, seconds',
+  'setting.bonus.enabled.label': 'Daily wheel enabled',
+  'setting.bonus.cooldownHours.label': 'Hours between spins',
+  'setting.bonus.wheel.label': 'Wheel slices',
+  'setting.bonus.wheel.hint': 'Shares must add up to 1. Ticket ranges are recomputed on save.',
+  'setting.withdrawals.provider.label': 'Delivery channel',
+  'setting.withdrawals.provider.hint':
+    'MARKET buys each skin on market.csgo.com and has the seller send it straight to the player. BOTS hands out items a Steam bot in the farm already holds. The channel is stamped on a request when it is made, so switching does not strand anything in flight.',
+  'setting.withdrawals.market.maxOverpayBps.label': 'Maximum overpay, basis points',
+  'setting.withdrawals.market.maxOverpayBps.hint':
+    'How far above the price the player was credited a purchase may go. 700 bps = 7%. Past it the item is not bought and goes back to the inventory.',
+  'setting.withdrawals.market.minSellerChance.label': 'Minimum seller delivery rate, %',
+  'setting.withdrawals.market.minSellerChance.hint':
+    'Sellers who deliver less often than this are skipped, even when they are cheapest.',
+  'setting.withdrawals.market.stuckAfterMin.label': 'Flag an undelivered purchase after, minutes',
+  'setting.withdrawals.market.stuckAfterMin.hint':
+    'Only flags it for an operator. A paid purchase is never written off on a timer — the money is already spent and the market may still deliver.',
 };
 
 const DICTIONARIES: Record<Locale, Record<TranslationKey, string>> = { ru, en };
@@ -604,6 +1182,46 @@ export function translateError(locale: Locale, code: string | undefined, fallbac
   const key = `error.${code}` as TranslationKey;
   const translated = DICTIONARIES[locale]?.[key];
   return translated ?? fallback;
+}
+
+/**
+ * A setting's label or hint in the operator's language.
+ *
+ * The settings registry lives on the server and describes itself in English,
+ * which is right: it is the one list of what a setting *is*, and duplicating
+ * that list per locale would give two places to forget. So the panel translates
+ * by key and falls back to whatever the registry sent, exactly as translateError
+ * does — a knob added on the backend stays readable before its translation
+ * lands, rather than rendering as a raw dotted key.
+ */
+export function translateSetting(
+  locale: Locale,
+  settingKey: string,
+  field: 'label' | 'hint',
+  fallback: string | null,
+): string | null {
+  const key = `setting.${settingKey}.${field}` as TranslationKey;
+  return DICTIONARIES[locale]?.[key] ?? fallback;
+}
+
+/**
+ * A message the domain layer produced, in the reader's language.
+ *
+ * Shared logic such as the RTP verdict ships an English sentence *and* a code
+ * with its parameters. The sentence exists so a script or a server log reads
+ * properly; the code exists so an interface can say the same thing in the
+ * operator's language. Falls back to the sentence, so a code added in the
+ * domain is legible before its translation lands.
+ */
+export function translateDomainMessage(
+  locale: Locale,
+  code: string,
+  params: Record<string, string | number>,
+  fallback: string,
+): string {
+  const key = code as TranslationKey;
+  if (!DICTIONARIES[locale]?.[key]) return fallback;
+  return translate(locale, key, params);
 }
 
 export { ErrorCode };

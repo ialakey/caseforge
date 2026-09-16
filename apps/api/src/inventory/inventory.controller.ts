@@ -5,7 +5,6 @@ import {
   inventoryQuerySchema,
   sellAllSchema,
   sellItemsSchema,
-  withdrawItemsSchema,
 } from '@caseforge/shared';
 import { InventoryService } from './inventory.service';
 import { CurrentUser, type AuthenticatedUser } from '../common/current-user.decorator';
@@ -44,13 +43,5 @@ export class InventoryController {
     @Body(new ZodValidationPipe(sellAllSchema)) body: { band: PriceBandKey },
   ) {
     return this.inventory.sellAll(user.id, body.band);
-  }
-
-  @Post('withdraw')
-  withdraw(
-    @CurrentUser() user: AuthenticatedUser,
-    @Body(new ZodValidationPipe(withdrawItemsSchema)) body: { inventoryItemIds: string[] },
-  ) {
-    return this.inventory.withdraw(user.id, body.inventoryItemIds);
   }
 }

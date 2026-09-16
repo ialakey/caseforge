@@ -33,6 +33,11 @@ const botStatusSchema = z.object({
   status: z.enum(['DISABLED', 'OFFLINE']),
 });
 
+/** The same two transitions a bot has, for the same reason. */
+const marketAccountStatusSchema = z.object({
+  status: z.enum(['DISABLED', 'OFFLINE']),
+});
+
 /**
  * Settings arrive as a partial map. Validating the individual values is the
  * registry's job, so this only pins the envelope.
@@ -120,6 +125,36 @@ export class AdminController {
   @Get('bots')
   bots() {
     return this.admin.listBots();
+  }
+
+  /**
+   * The buying account and what it is in the middle of buying.
+   *
+   * Named for the channel rather than the route because `market` on this class
+   * is already the Steam Community market — the one prices come from, which has
+   * nothing to do with the one withdrawals are bought on.
+   */
+  @Get('market')
+  marketChannel() {
+    return this.admin.marketOverview();
+  }
+
+  @Post('market/accounts/:id/status')
+  @Roles(UserRole.ADMIN)
+  setMarketAccountStatus(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body(new ZodValidationPipe(marketAccountStatusSchema))
+    body: { status: 'DISABLED' | 'OFFLINE' },
+    @Req() request: FastifyRequest,
+  ) {
+    return this.admin.setMarketAccountStatus(actor.id, id, body.status, request.ip ?? null);
+  }
+
+  @Get('market/purchases')
+  marketPurchases(@Query() query: Record<string, string>) {
+    const { page, perPage } = paginationSchema.parse(query);
+    return this.admin.listMarketPurchases(query.status, page, perPage);
   }
 
   /**

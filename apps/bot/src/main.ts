@@ -2,8 +2,12 @@ import path from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { Worker } from 'bullmq';
+import { MARKET_API_URL } from '@caseforge/shared';
 import { BotPool } from './bot-pool.ts';
+import { MarketPool } from './market-pool.ts';
 import { WithdrawalProcessor } from './withdrawal-processor.ts';
+import { MarketWithdrawalProcessor } from './market-processor.ts';
+import { SettingsReader } from './settings-reader.ts';
 
 dotenvConfig({ path: path.join(import.meta.dirname, '../../../.env') });
 
@@ -16,44 +20,102 @@ function redisConnection(): { host: string; port: number } {
   return { host: url.hostname, port: Number(url.port || 6379) };
 }
 
+/**
+ * The withdrawal worker.
+ *
+ * It consumes one queue and can fill a request through either channel. Which
+ * one is decided when the request is made, not here: the row carries its own
+ * `provider`, so a request already in flight keeps being handled by the half of
+ * the worker that started it even after an operator flips the setting.
+ *
+ * The market channel is the one the site runs on by default — a single
+ * market.csgo.com account buying each skin and having the seller deliver it
+ * straight to the player. The bot farm is still here because a site that has
+ * already funded one should not be forced off it, and because an account that
+ * holds its own inventory is the only way to deliver something the market is
+ * not selling.
+ */
 async function main(): Promise<void> {
+  const settings = new SettingsReader(prisma);
+
+  // Several market accounts, each throttled on its own: the five-requests-a-
+  // second limit that deletes a key is counted per key, so one queue per key is
+  // what turns a second account into extra throughput rather than decoration.
+  const market = new MarketPool(prisma, process.env.MARKET_API_URL ?? MARKET_API_URL);
+  await market.start();
+  const marketProcessor = new MarketWithdrawalProcessor(prisma, market, settings);
+
+  // The pool logs in whatever bots are registered. On a market-only site there
+  // are none, and it costs nothing; the alternative — starting it on a setting
+  // — would leave bot requests made a minute ago with nobody to answer them.
   const pool = new BotPool(prisma);
   await pool.start();
+  const botProcessor = new WithdrawalProcessor(prisma, pool);
 
-  if (pool.size === 0) {
+  if (market.size === 0) {
     console.warn(
-      '[bot] No bot is active. The worker keeps running, but withdrawal ' +
-        'requests will fail with "no bot". Register bots via scripts/add-bot.ts.',
+      '[worker] no market account registered. Requests on the market channel will fail ' +
+        'until one is; get a key at https://market.csgo.com/api and register it with ' +
+        'pnpm --filter @caseforge/bot add-market-account.',
     );
+  } else if (market.onlineCount === 0) {
+    console.warn('[worker] market accounts are registered but none is answering');
   }
-
-  const processor = new WithdrawalProcessor(prisma, pool);
+  if (pool.size === 0) {
+    console.log('[worker] no Steam bots registered — the bot channel is unavailable');
+  }
 
   const worker = new Worker(
     WITHDRAWAL_QUEUE,
-    async (job) => processor.process(job.data.withdrawalId as string),
+    async (job) => {
+      const withdrawalId = job.data.withdrawalId as string;
+      const withdrawal = await prisma.withdrawal.findUnique({
+        where: { id: withdrawalId },
+        select: { provider: true },
+      });
+      if (!withdrawal) return;
+
+      return withdrawal.provider === 'MARKET'
+        ? marketProcessor.process(withdrawalId)
+        : botProcessor.process(withdrawalId);
+    },
     {
       connection: redisConnection(),
-      // Valve throttles offer creation: aggressive parallelism is not an option.
+      // Both channels are throttled upstream — Valve on offer creation, the
+      // market on requests per second — so parallelism here buys nothing.
       concurrency: 2,
       limiter: { max: 10, duration: 60_000 },
     },
   );
 
   worker.on('failed', (job, err) => {
-    console.error(`[bot] job ${job?.id} failed: ${err.message}`);
+    console.error(`[worker] job ${job?.id} failed: ${err.message}`);
   });
 
-  // Steam sends no webhooks — offer state is polled.
+  // Neither Steam nor the market sends a webhook: delivery is only ever learnt
+  // by asking.
   const pollInterval = Number(process.env.WITHDRAWAL_POLL_INTERVAL_MS ?? 10_000);
   const timer = setInterval(() => {
-    void processor.pollSentOffers().catch((err) => console.error(`[bot] polling: ${String(err)}`));
+    void botProcessor
+      .pollSentOffers()
+      .catch((err) => console.error(`[worker] polling offers: ${String(err)}`));
+    void marketProcessor
+      .pollOpenPurchases()
+      .catch((err) => console.error(`[worker] polling purchases: ${String(err)}`));
+    // Picks up accounts an operator added or disabled while the worker ran.
+    void market
+      .reload()
+      .then(() => market.refresh())
+      .catch((err) => console.error(`[worker] refreshing market accounts: ${String(err)}`));
   }, pollInterval);
 
-  console.log(`[bot] worker started, bots online: ${pool.size}`);
+  console.log(
+    `[worker] started, bots online: ${pool.size}, ` +
+      `market accounts online: ${market.onlineCount}/${market.size}`,
+  );
 
   const shutdown = async (): Promise<void> => {
-    console.log('[bot] shutting down...');
+    console.log('[worker] shutting down...');
     clearInterval(timer);
     await worker.close();
     pool.stop();

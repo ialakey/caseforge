@@ -10,6 +10,7 @@ import {
 import { PrismaService } from '../common/prisma.service';
 import { SettingsService } from '../common/settings.service';
 import { CasesService } from '../cases/cases.service';
+import { MarketService } from '../market/market.service';
 import { badRequest, notFound } from '../common/app-error';
 
 @Injectable()
@@ -18,6 +19,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly cases: CasesService,
     private readonly settings: SettingsService,
+    private readonly market: MarketService,
   ) {}
 
   /**
@@ -404,12 +406,127 @@ export class AdminService {
         take: perPage,
         include: {
           user: { select: { username: true, steamId64: true } },
-          items: { include: { item: true } },
+          // The request's own lines, not the inventory rows it happens to still
+          // be holding: a failed request holds none and would otherwise look
+          // like it had been for nothing.
+          items: { orderBy: { createdAt: 'asc' } },
           bot: { select: { username: true, steamId64: true } },
+          purchases: true,
         },
       }),
     ]);
     return { total, page, perPage, items };
+  }
+
+  /**
+   * The market channel at a glance.
+   *
+   * Three questions an operator actually has: can the account buy, what is it
+   * in the middle of buying, and what has been paid for but not delivered. The
+   * last one is the reason this page exists — a purchase is never written off
+   * on a timer, so somebody has to be told about it.
+   */
+  async marketOverview() {
+    const stuckMinutes = await this.settings.read<number>('withdrawals.market.stuckAfterMin');
+    const cutoff = new Date(Date.now() - stuckMinutes * 60_000);
+
+    const [accounts, spendable, counts, stuck, spent] = await Promise.all([
+      this.market.accounts(),
+      this.market.spendableBalance(),
+      this.prisma.marketPurchase.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.prisma.marketPurchase.findMany({
+        where: { status: 'BOUGHT', boughtAt: { lt: cutoff } },
+        orderBy: { boughtAt: 'asc' },
+        take: 50,
+        include: {
+          withdrawal: {
+            select: { id: true, user: { select: { username: true, steamId64: true } } },
+          },
+          account: { select: { id: true, label: true } },
+        },
+      }),
+      // What the channel has actually cost, against what the site valued the
+      // items at. The gap is the margin the overpay ceiling is protecting.
+      this.prisma.marketPurchase.aggregate({
+        where: { status: 'DELIVERED' },
+        _sum: { paidPrice: true, maxPrice: true },
+        _count: { _all: true },
+      }),
+    ]);
+
+    return {
+      accounts,
+      spendable,
+      stuckAfterMin: stuckMinutes,
+      counts: Object.fromEntries(counts.map((c) => [c.status, c._count._all])),
+      delivered: {
+        count: spent._count._all,
+        paid: spent._sum.paidPrice ?? 0,
+        authorised: spent._sum.maxPrice ?? 0,
+      },
+      stuck,
+    };
+  }
+
+  async listMarketPurchases(status: string | undefined, page: number, perPage: number) {
+    const where = status
+      ? { status: status as Prisma.EnumMarketPurchaseStatusFilter['equals'] }
+      : {};
+
+    const [total, items] = await Promise.all([
+      this.prisma.marketPurchase.count({ where }),
+      this.prisma.marketPurchase.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * perPage,
+        take: perPage,
+        include: {
+          withdrawal: {
+            select: {
+              id: true,
+              status: true,
+              user: { select: { username: true, steamId64: true } },
+            },
+          },
+          account: { select: { id: true, label: true } },
+        },
+      }),
+    ]);
+    return { total, page, perPage, items };
+  }
+
+  /**
+   * Takes a market account out of rotation, or puts it back.
+   *
+   * Two transitions only, and neither of them ONLINE: the worker owns that, and
+   * a panel that could declare an account healthy would be a second author of
+   * the same fact — which is how an account ends up ONLINE in the table and
+   * rejected by the market in reality. Re-enabling lands on OFFLINE, and the
+   * worker's next refresh decides whether it deserves better.
+   */
+  async setMarketAccountStatus(
+    actorId: string,
+    accountId: string,
+    status: 'DISABLED' | 'OFFLINE',
+    ip: string | null,
+  ) {
+    const before = await this.prisma.marketAccount.findUnique({ where: { id: accountId } });
+    if (!before) throw notFound(ErrorCode.VALIDATION_FAILED, 'Market account not found');
+
+    const after = await this.prisma.marketAccount.update({
+      where: { id: accountId },
+      data: { status, lastError: status === 'OFFLINE' ? null : before.lastError },
+    });
+    await this.audit(
+      actorId,
+      'marketAccount.setStatus',
+      'MarketAccount',
+      accountId,
+      { status: before.status },
+      { status: after.status },
+      ip,
+    );
+    return { id: after.id, status: after.status };
   }
 
   async listBots() {

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { WHEEL_SEGMENTS, wheelSegmentsSchema } from './bonus.ts';
+import { WITHDRAWAL_PROVIDERS } from './market.ts';
 
 /**
  * Runtime settings.
@@ -16,11 +17,18 @@ import { WHEEL_SEGMENTS, wheelSegmentsSchema } from './bonus.ts';
  * site may change its mind about; fairness is not one of them.
  */
 
-export const SETTING_GROUPS = ['site', 'deposits', 'economy', 'limits', 'bonus'] as const;
+export const SETTING_GROUPS = [
+  'site',
+  'deposits',
+  'economy',
+  'limits',
+  'bonus',
+  'withdrawals',
+] as const;
 export type SettingGroup = (typeof SETTING_GROUPS)[number];
 
 /** How the admin panel should render the field. */
-export type SettingKind = 'boolean' | 'int' | 'money' | 'json';
+export type SettingKind = 'boolean' | 'int' | 'money' | 'json' | 'enum';
 
 export interface SettingDef {
   group: SettingGroup;
@@ -30,6 +38,8 @@ export interface SettingDef {
   default: unknown;
   label: string;
   hint?: string;
+  /** The allowed values of an `enum` setting, in the order to offer them. */
+  options?: readonly string[];
 }
 
 const bounded = (min: number, max: number) => z.coerce.number().int().min(min).max(max);
@@ -114,6 +124,47 @@ export const SETTINGS = {
     label: 'Wheel slices',
     hint: 'Shares must add up to 1. Ticket ranges are recomputed on save.',
   },
+
+  'withdrawals.provider': {
+    group: 'withdrawals',
+    kind: 'enum',
+    options: WITHDRAWAL_PROVIDERS,
+    schema: z.enum(WITHDRAWAL_PROVIDERS),
+    default: 'MARKET',
+    label: 'Delivery channel',
+    hint:
+      'MARKET buys each skin on market.csgo.com and has the seller send it straight to the ' +
+      'player. BOTS hands out items a Steam bot in the farm already holds. The channel is ' +
+      'stamped on a request when it is made, so switching does not strand anything in flight.',
+  },
+  'withdrawals.market.maxOverpayBps': {
+    group: 'withdrawals',
+    kind: 'int',
+    schema: bounded(0, 10_000),
+    default: 700,
+    label: 'Maximum overpay, basis points',
+    hint:
+      'How far above the price the player was credited a purchase may go. 700 bps = 7%. ' +
+      'Past it the item is not bought and goes back to the inventory.',
+  },
+  'withdrawals.market.minSellerChance': {
+    group: 'withdrawals',
+    kind: 'int',
+    schema: bounded(0, 100),
+    default: 80,
+    label: 'Minimum seller delivery rate, %',
+    hint: 'Sellers who deliver less often than this are skipped, even when they are cheapest.',
+  },
+  'withdrawals.market.stuckAfterMin': {
+    group: 'withdrawals',
+    kind: 'int',
+    schema: bounded(5, 24 * 60),
+    default: 45,
+    label: 'Flag an undelivered purchase after, minutes',
+    hint:
+      'Only flags it for an operator. A paid purchase is never written off on a timer — the ' +
+      'money is already spent and the market may still deliver.',
+  },
 } as const satisfies Record<string, SettingDef>;
 
 export type SettingKey = keyof typeof SETTINGS;
@@ -160,6 +211,8 @@ export interface PublicSettingDef {
   kind: SettingKind;
   label: string;
   hint: string | null;
+  /** Populated for `enum` settings only; null everywhere else. */
+  options: readonly string[] | null;
 }
 
 /**
@@ -172,7 +225,16 @@ export function settingDefinitions(): Record<SettingKey, PublicSettingDef> {
   return Object.fromEntries(
     SETTING_KEYS.map((key) => {
       const def: SettingDef = SETTINGS[key];
-      return [key, { group: def.group, kind: def.kind, label: def.label, hint: def.hint ?? null }];
+      return [
+        key,
+        {
+          group: def.group,
+          kind: def.kind,
+          label: def.label,
+          hint: def.hint ?? null,
+          options: def.options ?? null,
+        },
+      ];
     }),
   ) as Record<SettingKey, PublicSettingDef>;
 }

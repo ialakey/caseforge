@@ -117,16 +117,22 @@ export function InventoryPanel() {
     }
   }
 
+  /**
+   * Withdrawing does not hand the item over, it starts a purchase: the site
+   * buys this exact skin on market.csgo.com and the seller delivers it to the
+   * player's trade link. So the item goes to LOCKED rather than WITHDRAWN, and
+   * the confirmation says a request was made rather than that it is done.
+   */
   async function withdrawOne(id: string): Promise<void> {
     setBusyId(id);
     setError(null);
     setNotice(null);
     try {
-      const res = await api<{ withdrawn: number }>('/api/inventory/withdraw', {
+      await api<{ id: string }>('/api/withdrawals', {
         method: 'POST',
         body: JSON.stringify({ inventoryItemIds: [id] }),
       });
-      setNotice(t('inventory.withdrawn', { count: res.withdrawn }));
+      setNotice(t('inventory.withdrawn', { count: 1 }));
       await reload();
     } catch (err) {
       report(err, 'inventory.withdrawFailed');
@@ -326,7 +332,7 @@ function InventoryCard({
           <button
             onClick={onWithdraw}
             disabled={busy}
-            title={t('inventory.withdrawStub')}
+            title={t('inventory.withdrawHint')}
             className="cf-btn-ghost py-1.5 text-[11px]"
           >
             {t('inventory.withdraw')}

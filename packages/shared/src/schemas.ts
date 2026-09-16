@@ -92,10 +92,12 @@ export const sellAllSchema = z.object({
 });
 
 /** Withdrawing straight from the inventory. */
-export const withdrawItemsSchema = z.object({
-  inventoryItemIds: z.array(z.string().uuid()).min(1).max(100),
-});
-
+/**
+ * Twenty at a time. On the market channel each item is bought separately from
+ * its own seller, so a request is as many purchases as it has items, and a
+ * hundred of them would spend several minutes against the market's rate limit
+ * before the player learnt whether any of it worked.
+ */
 export const requestWithdrawalSchema = z.object({
   inventoryItemIds: z.array(z.string().uuid()).min(1).max(20),
 });

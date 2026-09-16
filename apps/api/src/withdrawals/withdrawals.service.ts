@@ -6,8 +6,9 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { ErrorCode } from '@caseforge/shared';
+import { ErrorCode, type WithdrawalProvider } from '@caseforge/shared';
 import { PrismaService } from '../common/prisma.service';
+import { SettingsService } from '../common/settings.service';
 import { badRequest } from '../common/app-error';
 
 export const WITHDRAWAL_QUEUE = 'withdrawals';
@@ -20,7 +21,10 @@ export class WithdrawalsService implements OnModuleDestroy {
   private readonly logger = new Logger(WithdrawalsService.name);
   private readonly queue: Queue;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly settings: SettingsService,
+  ) {
     const url = new URL(process.env.REDIS_URL ?? 'redis://localhost:6380');
     this.queue = new Queue(WITHDRAWAL_QUEUE, {
       connection: { host: url.hostname, port: Number(url.port || 6379) },
@@ -46,8 +50,13 @@ export class WithdrawalsService implements OnModuleDestroy {
    * Creates a withdrawal request.
    *
    * Items move to LOCKED in the same transaction that creates the request:
-   * otherwise the player can sell an item while the bot is sending the offer,
-   * and the site hands out something it has already paid a balance for.
+   * otherwise the player can sell an item while the delivery is in flight, and
+   * the site hands out something it has already paid a balance for.
+   *
+   * The delivery channel is resolved here and stored on the request rather than
+   * read again by the worker. An operator switching from the market to the bot
+   * farm changes what happens to the next request, never to one already being
+   * paid for.
    */
   async request(userId: string, inventoryItemIds: string[]) {
     const uniqueIds = [...new Set(inventoryItemIds)];
@@ -58,11 +67,15 @@ export class WithdrawalsService implements OnModuleDestroy {
     });
     if (!user) throw new NotFoundException('User not found');
     if (user.isBanned) throw badRequest(ErrorCode.ACCOUNT_BANNED, 'Account is banned');
-    if (!user.tradeUrl) throw badRequest(ErrorCode.TRADE_URL_MISSING, 'Set your Steam trade URL first');
+    if (!user.tradeUrl)
+      throw badRequest(ErrorCode.TRADE_URL_MISSING, 'Set your Steam trade URL first');
+
+    const provider = await this.settings.read<WithdrawalProvider>('withdrawals.provider');
 
     const withdrawal = await this.prisma.$transaction(async (tx) => {
       const items = await tx.inventoryItem.findMany({
         where: { id: { in: uniqueIds }, userId, status: 'AVAILABLE' },
+        include: { item: { select: { marketHashName: true } } },
       });
       if (items.length !== uniqueIds.length) {
         throw badRequest(ErrorCode.ITEM_UNAVAILABLE, 'Some items are not available for withdrawal');
@@ -71,7 +84,22 @@ export class WithdrawalsService implements OnModuleDestroy {
       const totalValue = items.reduce((sum, i) => sum + i.acquiredPrice, 0);
 
       const created = await tx.withdrawal.create({
-        data: { userId, totalValue, tradeUrl: user.tradeUrl!, status: 'PENDING' },
+        data: { userId, totalValue, tradeUrl: user.tradeUrl!, status: 'PENDING', provider },
+      });
+
+      // The request's own record of what it was for. Written here, in the same
+      // transaction as the lock, because this is the only moment at which the
+      // answer is certainly known: from the next status change onwards an item
+      // may have been given back, and the lock that would have told us is the
+      // first thing a refund clears.
+      await tx.withdrawalItem.createMany({
+        data: items.map((inv) => ({
+          withdrawalId: created.id,
+          inventoryItemId: inv.id,
+          itemId: inv.itemId,
+          marketHashName: inv.item.marketHashName,
+          price: inv.acquiredPrice,
+        })),
       });
 
       const locked = await tx.inventoryItem.updateMany({
@@ -89,29 +117,63 @@ export class WithdrawalsService implements OnModuleDestroy {
 
     // jobId = the request id: a repeat call creates no second offer even if
     // the client fires the request twice.
-    await this.queue.add(
-      'process',
-      { withdrawalId: withdrawal.id },
-      { jobId: withdrawal.id },
-    );
+    await this.queue.add('process', { withdrawalId: withdrawal.id }, { jobId: withdrawal.id });
 
     this.logger.log(`Withdrawal ${withdrawal.id} queued`);
     return withdrawal;
   }
 
+  /**
+   * The player's requests.
+   *
+   * Purchases come along because on the market channel a request is not one
+   * event but several: "two of your three skins have arrived, the third is
+   * still with its seller" is the only honest thing to show, and it cannot be
+   * said from the request's own status alone.
+   */
   async list(userId: string) {
-    return this.prisma.withdrawal.findMany({
+    const withdrawals = await this.prisma.withdrawal.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 50,
-      include: { items: { include: { item: true } } },
+      include: {
+        items: { orderBy: { createdAt: 'asc' } },
+        purchases: {
+          select: {
+            id: true,
+            inventoryItemId: true,
+            marketHashName: true,
+            status: true,
+            tradeOfferId: true,
+            deliveredAt: true,
+          },
+        },
+      },
     });
+
+    return withdrawals.map((w) => ({
+      ...w,
+      // The market's own prices and our ceiling are the site's business, not
+      // the player's — they see whether their item is coming, not what it cost
+      // to get it to them.
+      purchases: w.purchases.map((p) => ({
+        inventoryItemId: p.inventoryItemId,
+        marketHashName: p.marketHashName,
+        status: p.status,
+        tradeOfferId: p.tradeOfferId,
+        deliveredAt: p.deliveredAt,
+      })),
+    }));
   }
 
   /**
-   * Cancels a request. Possible while the bot has not sent the offer yet —
-   * afterwards the items are in flight and the offer itself must be cancelled
-   * in Steam.
+   * Cancels a request, while nothing has left yet.
+   *
+   * Only a PENDING request qualifies, and the window is deliberately narrow: on
+   * the bot channel the offer is already with the player afterwards, and on the
+   * market channel the money has already been spent on a skin that is on its
+   * way to them. Neither is something the site can take back by writing to its
+   * own database.
    */
   async cancel(userId: string, withdrawalId: string) {
     return this.prisma.$transaction(async (tx) => {
@@ -120,7 +182,10 @@ export class WithdrawalsService implements OnModuleDestroy {
       });
       if (!withdrawal) throw new NotFoundException('Request not found');
       if (withdrawal.status !== 'PENDING') {
-        throw badRequest(ErrorCode.WITHDRAWAL_NOT_CANCELLABLE, 'This request can no longer be cancelled');
+        throw badRequest(
+          ErrorCode.WITHDRAWAL_NOT_CANCELLABLE,
+          'This request can no longer be cancelled',
+        );
       }
 
       const cancelled = await tx.withdrawal.updateMany({
@@ -128,9 +193,14 @@ export class WithdrawalsService implements OnModuleDestroy {
         data: { status: 'CANCELLED' },
       });
       if (cancelled.count === 0) {
-        throw badRequest(ErrorCode.WITHDRAWAL_NOT_CANCELLABLE, 'The request is already being processed');
+        throw badRequest(
+          ErrorCode.WITHDRAWAL_NOT_CANCELLABLE,
+          'The request is already being processed',
+        );
       }
 
+      // Only the lock is released. The lines stay, so a cancelled request can
+      // still say what it was for.
       await tx.inventoryItem.updateMany({
         where: { withdrawalId, userId },
         data: { status: 'AVAILABLE', withdrawalId: null },

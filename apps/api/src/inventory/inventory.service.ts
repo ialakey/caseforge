@@ -210,47 +210,6 @@ export class InventoryService {
     });
   }
 
-  /**
-   * Withdrawal placeholder.
-   *
-   * The real withdrawal — a bot, a trade offer, a queue and a trade URL — lives
-   * in the withdrawals module and is untouched by this. What the interface
-   * needs today is the inventory side of it: the item leaves the account and
-   * stays on record as WITHDRAWN. This marks it and nothing else, the same way
-   * the top-up dialog credits a balance without a payment provider behind it,
-   * and it is deliberately the only path that does so, so that wiring the bot
-   * farm up later means deleting this rather than untangling it.
-   */
-  async withdraw(
-    userId: string,
-    inventoryItemIds: string[],
-  ): Promise<{ withdrawn: number; total: number }> {
-    const uniqueIds = [...new Set(inventoryItemIds)];
-
-    return this.prisma.$transaction(async (tx) => {
-      const items = await tx.inventoryItem.findMany({
-        where: { id: { in: uniqueIds }, userId, status: 'AVAILABLE' },
-        select: { id: true, acquiredPrice: true },
-      });
-      if (items.length !== uniqueIds.length) {
-        throw badRequest(ErrorCode.ITEM_UNAVAILABLE, 'Some items are not available for withdrawal');
-      }
-
-      const claimed = await tx.inventoryItem.updateMany({
-        where: { id: { in: uniqueIds }, userId, status: 'AVAILABLE' },
-        data: { status: 'WITHDRAWN' },
-      });
-      if (claimed.count !== uniqueIds.length) {
-        throw badRequest(ErrorCode.ITEMS_CHANGED, 'The items changed, please try again');
-      }
-
-      return {
-        withdrawn: claimed.count,
-        total: items.reduce((sum, i) => sum + i.acquiredPrice, 0),
-      };
-    });
-  }
-
   /** Credits a sale to the balance and writes the ledger entry for it. */
   private async credit(
     tx: Prisma.TransactionClient,
