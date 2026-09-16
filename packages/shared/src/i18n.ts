@@ -524,7 +524,8 @@ const ru = {
   'admin.market.empty': 'Пока ничего не куплено.',
   'admin.market.loadFailed': 'Не удалось загрузить канал маркета',
   'admin.market.accounts': 'Аккаунты',
-  'admin.market.accountsHint': 'Маркет удаляет ключ, который превысил пять запросов в секунду, поэтому один ключ ограничивает скорость выводов всего сайта. Каждый аккаунт троттлится отдельно — лимит считается по ключу.',
+  'admin.market.accountsHint':
+    'Маркет удаляет ключ, который превысил пять запросов в секунду, поэтому один ключ ограничивает скорость выводов всего сайта. Каждый аккаунт троттлится отдельно — лимит считается по ключу.',
   'admin.market.accountsEmpty': 'Аккаунтов не заведено. Добавьте через',
   'admin.market.colAccount': 'Аккаунт',
   'admin.market.colBalance': 'Баланс',
@@ -532,7 +533,8 @@ const ru = {
   'admin.market.colRequests': 'Запросов',
   'admin.market.colChecked': 'Проверен',
   'admin.market.spendable': 'Доступно к трате',
-  'admin.market.spendableHint': 'Сумма по аккаунтам, которые сейчас в строю. Покупка дороже остатка любого отдельного аккаунта не пройдёт, даже если сумма её покрывает.',
+  'admin.market.spendableHint':
+    'Сумма по аккаунтам, которые сейчас в строю. Покупка дороже остатка любого отдельного аккаунта не пройдёт, даже если сумма её покрывает.',
   'admin.market.colPurchaseAccount': 'Аккаунт',
   'admin.market.statusFailed': 'Не удалось сменить статус аккаунта',
   'admin.market.neverChecked': 'ни разу',
@@ -1082,7 +1084,8 @@ const en: Record<TranslationKey, string> = {
   'admin.market.empty': 'Nothing bought yet.',
   'admin.market.loadFailed': 'Could not load the market channel',
   'admin.market.accounts': 'Accounts',
-  'admin.market.accountsHint': 'The market deletes a key that goes over five requests a second, so a single key caps how fast the whole site can hand items out. Each account is throttled on its own, because the limit is counted per key.',
+  'admin.market.accountsHint':
+    'The market deletes a key that goes over five requests a second, so a single key caps how fast the whole site can hand items out. Each account is throttled on its own, because the limit is counted per key.',
   'admin.market.accountsEmpty': 'No accounts registered. Add one with',
   'admin.market.colAccount': 'Account',
   'admin.market.colBalance': 'Balance',
@@ -1090,7 +1093,8 @@ const en: Record<TranslationKey, string> = {
   'admin.market.colRequests': 'Requests',
   'admin.market.colChecked': 'Checked',
   'admin.market.spendable': 'Spendable',
-  'admin.market.spendableHint': 'Summed over the accounts currently in rotation. A purchase larger than any single account\u2019s balance will still be refused, even when the total covers it.',
+  'admin.market.spendableHint':
+    'Summed over the accounts currently in rotation. A purchase larger than any single account\u2019s balance will still be refused, even when the total covers it.',
   'admin.market.colPurchaseAccount': 'Account',
   'admin.market.statusFailed': 'Could not change the account status',
   'admin.market.neverChecked': 'never',
