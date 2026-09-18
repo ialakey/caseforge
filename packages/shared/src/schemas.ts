@@ -130,7 +130,24 @@ export const upsertCaseSchema = z.object({
    */
   description: z.string().trim().max(600).nullable().optional(),
   descriptionEn: z.string().trim().max(600).nullable().optional(),
-  price: z.number().int().positive(),
+  /**
+   * Zero is allowed, and only means anything together with `isFree`. The
+   * refinement at the bottom of this schema is what ties the two together:
+   * a free case must cost nothing, and a paid one must cost something.
+   */
+  price: z.number().int().min(0),
+  /** A free case is rationed by top-ups and a cooldown instead of a price. */
+  isFree: z.boolean().default(false),
+  /**
+   * The free terms, in minor units and in openings per rolling 24 hours.
+   *
+   * Optional rather than defaulted, so that omitting them means "leave them
+   * as they are". They are pure operator policy — no survey or import carries
+   * them — and a re-import that reset every deposit tier to zero would be a
+   * quiet giveaway of the whole catalogue.
+   */
+  freeMinDeposit: z.number().int().min(0).max(100_000_000).optional(),
+  freeMaxOpens: z.number().int().min(1).max(100).optional(),
   /**
    * Either an absolute URL — a Steam image, a CDN — or a root-relative path,
    * because case art the site draws and serves itself is not a lesser kind of
@@ -159,6 +176,32 @@ export const upsertCaseSchema = z.object({
     .min(1),
 });
 export type UpsertCaseInput = z.infer<typeof upsertCaseSchema>;
+
+/**
+ * Price and free-ness have to agree.
+ *
+ * Checked here rather than in the service because it is a property of the
+ * input, not of the world: a free case that also charges money, or a paid case
+ * priced at nothing, is a contradiction no amount of database state can
+ * resolve. A zero price on a paid case is the dangerous half — it would hand
+ * out a knife case for nothing until somebody noticed.
+ */
+export const upsertCaseChecked = upsertCaseSchema.superRefine((input, ctx) => {
+  if (input.isFree && input.price !== 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['price'],
+      message: 'A free case must be priced at zero',
+    });
+  }
+  if (!input.isFree && input.price <= 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['price'],
+      message: 'A paid case must cost more than zero — or mark it as free',
+    });
+  }
+});
 
 /** Top-up: amounts in minor units; the cap guards against a typo in the zeros. */
 export const depositSchema = z.object({

@@ -73,6 +73,16 @@ export interface CaseView {
   description: string | null;
   descriptionEn: string | null;
   price: number;
+  /**
+   * The free-case terms, or null for an ordinary paid case.
+   *
+   * Part of the public case view because the terms are not a secret — a
+   * visitor who is not signed in should still be able to read what a free
+   * case would cost them in top-ups before deciding to register. What is
+   * absent here is the viewer's own standing against those terms, which is
+   * per-player and therefore lives behind authentication.
+   */
+  free: FreeCaseTerms | null;
   imageUrl: string | null;
   isActive: boolean;
   /**
@@ -143,6 +153,36 @@ export interface LiveDrop {
   rarity: ItemRarity;
   price: number;
   createdAt: string;
+}
+
+/** What a free case asks of a player before it opens. */
+export interface FreeCaseTerms {
+  /** Minimum top-up over the last 24 hours, in minor units; 0 means none. */
+  minDeposit: number;
+  /** How many openings are allowed within a rolling 24 hours. */
+  maxOpens: number;
+}
+
+/**
+ * One player measured against one free case's terms.
+ *
+ * Every number is over the same rolling 24 hours the terms are written in, so
+ * the page can show the shortfall rather than only a refusal.
+ */
+export interface FreeCaseStatus {
+  caseSlug: string;
+  terms: FreeCaseTerms;
+  /** Topped up by this player over the last 24 hours, in minor units. */
+  deposited: number;
+  /** Openings of this case by this player over the last 24 hours. */
+  opened: number;
+  canOpen: boolean;
+  /**
+   * When the oldest opening in the window falls out of it, which is the
+   * moment another one becomes available. Null when the limit is not what is
+   * blocking them — including when nothing is.
+   */
+  nextOpenAt: string | null;
 }
 
 /**

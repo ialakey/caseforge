@@ -12,6 +12,10 @@ export const ErrorCode = {
   RATE_LIMITED: 'RATE_LIMITED',
   CASE_UNAVAILABLE: 'CASE_UNAVAILABLE',
   CASE_EMPTY: 'CASE_EMPTY',
+  /** A free case whose top-up requirement the player has not met. */
+  FREE_CASE_DEPOSIT_REQUIRED: 'FREE_CASE_DEPOSIT_REQUIRED',
+  /** A free case already opened its allowance of times in the last 24 hours. */
+  FREE_CASE_COOLDOWN: 'FREE_CASE_COOLDOWN',
   BATCH_SIZE_INVALID: 'BATCH_SIZE_INVALID',
   ACCOUNT_BANNED: 'ACCOUNT_BANNED',
   NO_ACTIVE_SEED: 'NO_ACTIVE_SEED',
