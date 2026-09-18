@@ -12,6 +12,7 @@ import { CasesModule } from './cases/cases.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { DropsModule } from './drops/drops.module';
 import { WithdrawalsModule } from './withdrawals/withdrawals.module';
+import { ItemDepositsModule } from './deposits/item-deposits.module';
 import { UpgradeModule } from './upgrade/upgrade.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { BonusModule } from './bonus/bonus.module';
@@ -34,6 +35,7 @@ import { AdminModule } from './admin/admin.module';
     InventoryModule,
     DropsModule,
     WithdrawalsModule,
+    ItemDepositsModule,
     UpgradeModule,
     ContractsModule,
     BonusModule,

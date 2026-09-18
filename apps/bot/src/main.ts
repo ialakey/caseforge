@@ -7,6 +7,7 @@ import { BotPool } from './bot-pool.ts';
 import { MarketPool } from './market-pool.ts';
 import { WithdrawalProcessor } from './withdrawal-processor.ts';
 import { MarketWithdrawalProcessor } from './market-processor.ts';
+import { DepositProcessor } from './deposit-processor.ts';
 import { SettingsReader } from './settings-reader.ts';
 
 dotenvConfig({ path: path.join(import.meta.dirname, '../../../.env') });
@@ -51,6 +52,10 @@ async function main(): Promise<void> {
   const pool = new BotPool(prisma);
   await pool.start();
   const botProcessor = new WithdrawalProcessor(prisma, pool);
+  // Deposits ride the same pool and the same poll loop. They have no queue of
+  // their own: nothing about a deposit is urgent once it is created, because
+  // the next move is the player's.
+  const depositProcessor = new DepositProcessor(prisma, pool);
 
   if (market.size === 0) {
     console.warn(
@@ -102,6 +107,11 @@ async function main(): Promise<void> {
     void marketProcessor
       .pollOpenPurchases()
       .catch((err) => console.error(`[worker] polling purchases: ${String(err)}`));
+    void depositProcessor
+      .sendPending()
+      .then(() => depositProcessor.pollSentOffers())
+      .then(() => depositProcessor.expireStale())
+      .catch((err) => console.error(`[worker] deposits: ${String(err)}`));
     // Picks up accounts an operator added or disabled while the worker ran.
     void market
       .reload()

@@ -541,6 +541,40 @@ export class AdminService {
   }
 
   /**
+   * Deposits of skins, for an operator.
+   *
+   * The counterpart of the withdrawal list, and it answers the one question
+   * that list cannot: what has the site been given, and did the player get paid
+   * for it. A row stuck on ACCEPTED is the one to worry about — the skins
+   * arrived and the credit has not run — so it sorts to the top of any status
+   * filter by being the oldest thing not yet finished.
+   */
+  async listItemDeposits(status: string | undefined, page: number, perPage: number) {
+    const where = status
+      ? { status: status as Prisma.EnumItemDepositStatusFilter['equals'] }
+      : {};
+
+    const [total, items, stuck] = await Promise.all([
+      this.read.itemDeposit.count({ where }),
+      this.read.itemDeposit.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * perPage,
+        take: perPage,
+        include: {
+          user: { select: { username: true, steamId64: true } },
+          items: { orderBy: { createdAt: 'asc' } },
+          bot: { select: { username: true, steamId64: true } },
+        },
+      }),
+      // Counted separately rather than inferred from the page: an operator
+      // filtering by CREDITED still needs to know something is stuck.
+      this.read.itemDeposit.count({ where: { status: 'ACCEPTED' } }),
+    ]);
+    return { total, page, perPage, items, awaitingCredit: stuck };
+  }
+
+  /**
    * The market channel at a glance.
    *
    * Three questions an operator actually has: can the account buy, what is it

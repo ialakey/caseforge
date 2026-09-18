@@ -220,6 +220,18 @@ export const steamSearchSchema = z.object({
   count: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+/**
+ * The assets a player wants to hand over.
+ *
+ * Asset ids and nothing else: prices are quoted by the server from its own
+ * reading of the market, never taken from the browser. A client that could name
+ * its own price would be a client that could name any price.
+ */
+export const createItemDepositSchema = z.object({
+  assetIds: z.array(z.string().trim().min(1).max(32)).min(1).max(100),
+});
+export type CreateItemDepositInput = z.infer<typeof createItemDepositSchema>;
+
 export const adjustBalanceSchema = z.object({
   userId: z.string().uuid(),
   amount: z

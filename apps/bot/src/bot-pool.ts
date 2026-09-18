@@ -120,6 +120,31 @@ export class BotPool {
     return null;
   }
 
+  /**
+   * A bot with room to receive `count` more items.
+   *
+   * Capacity is the whole question for an incoming trade: a Steam inventory
+   * holds a thousand slots, and an offer sent to a full bot is one Steam
+   * refuses after the player has already agreed to it — the worst moment to
+   * find out. The counts come from the database rather than a live inventory
+   * read, so they are as fresh as the last mirror; the headroom in `maxItems`
+   * is what absorbs that lag.
+   */
+  async withCapacity(count: number): Promise<SteamBotClient | null> {
+    const records = await this.prisma.steamBot.findMany({
+      where: { status: 'ONLINE' },
+      orderBy: { currentItems: 'asc' },
+      select: { id: true, currentItems: true, maxItems: true },
+    });
+
+    for (const record of records) {
+      if (record.currentItems + count > record.maxItems) continue;
+      const client = this.clients.get(record.id);
+      if (client?.isReady) return client;
+    }
+    return null;
+  }
+
   get(botId: string): SteamBotClient | undefined {
     return this.clients.get(botId);
   }

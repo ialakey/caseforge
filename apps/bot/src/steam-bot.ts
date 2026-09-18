@@ -22,6 +22,13 @@ export interface SendOfferResult {
   escrow: boolean;
 }
 
+export interface RequestItemsParams {
+  tradeUrl: string;
+  /** assetIds in the *player's* inventory that the bot is asking for. */
+  assetIds: string[];
+  message: string;
+}
+
 /**
  * Wrapper around a single Steam account in the farm.
  *
@@ -166,6 +173,32 @@ export class SteamBotClient {
         );
       });
     }
+
+    return { tradeOfferId: String(offer.id), escrow: Boolean(offer.escrowEnds) };
+  }
+
+  /**
+   * Asks a player to hand items over — a withdrawal run backwards.
+   *
+   * The asymmetry with `sendOffer` is worth naming: an offer that only *asks*
+   * for items and gives nothing needs no mobile confirmation from us, because
+   * nothing of ours leaves. It does need the player to accept it in Steam, and
+   * there is no way to hurry that along.
+   *
+   * Escrow cuts the other way too. If the player has no mobile authenticator,
+   * Steam holds the skins for days before they reach the bot — reported here so
+   * the caller can decide whether to wait or give up.
+   */
+  async requestItems(params: RequestItemsParams): Promise<SendOfferResult> {
+    const offer = this.manager.createOffer(params.tradeUrl);
+    for (const assetId of params.assetIds) {
+      offer.addTheirItem({ appid: CS2_APP_ID, contextid: String(CS2_CONTEXT_ID), assetid: assetId });
+    }
+    offer.setMessage(params.message);
+
+    await new Promise<void>((resolve, reject) => {
+      offer.send((err: Error | null) => (err ? reject(err) : resolve()));
+    });
 
     return { tradeOfferId: String(offer.id), escrow: Boolean(offer.escrowEnds) };
   }

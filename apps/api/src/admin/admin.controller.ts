@@ -140,6 +140,13 @@ export class AdminController {
     return this.admin.listWithdrawals(query.status, page, perPage);
   }
 
+  /** Deposits of skins: what the site was given, and whether it paid for it. */
+  @Get('item-deposits')
+  itemDeposits(@Query() query: Record<string, string>) {
+    const { page, perPage } = paginationSchema.parse(query);
+    return this.admin.listItemDeposits(query.status, page, perPage);
+  }
+
   @Get('bots')
   bots() {
     return this.admin.listBots();

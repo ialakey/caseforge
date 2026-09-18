@@ -44,6 +44,8 @@ declare module 'steam-tradeoffer-manager' {
     escrowEnds: Date | null;
     state: number;
     addMyItem(item: { appid: number; contextid: string; assetid: string }): void;
+    /** Asks for an item out of the *other* side's inventory — a deposit. */
+    addTheirItem(item: { appid: number; contextid: string; assetid: string }): void;
     setMessage(message: string): void;
     send(callback: (err: Error | null, status: string) => void): void;
   }

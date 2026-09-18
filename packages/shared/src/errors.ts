@@ -16,6 +16,16 @@ export const ErrorCode = {
   FREE_CASE_DEPOSIT_REQUIRED: 'FREE_CASE_DEPOSIT_REQUIRED',
   /** A free case already opened its allowance of times in the last 24 hours. */
   FREE_CASE_COOLDOWN: 'FREE_CASE_COOLDOWN',
+  /** Depositing skins is switched off. */
+  ITEM_DEPOSITS_DISABLED: 'ITEM_DEPOSITS_DISABLED',
+  /** Steam would not show the player's inventory — private, or rate-limited. */
+  INVENTORY_UNAVAILABLE: 'INVENTORY_UNAVAILABLE',
+  /** The selection is worth less than the minimum, or holds nothing depositable. */
+  DEPOSIT_TOO_SMALL: 'DEPOSIT_TOO_SMALL',
+  /** A request is already in flight; one at a time keeps the asset ids honest. */
+  DEPOSIT_IN_PROGRESS: 'DEPOSIT_IN_PROGRESS',
+  /** No farm bot is online and has room for the items. */
+  NO_BOT_AVAILABLE: 'NO_BOT_AVAILABLE',
   BATCH_SIZE_INVALID: 'BATCH_SIZE_INVALID',
   ACCOUNT_BANNED: 'ACCOUNT_BANNED',
   NO_ACTIVE_SEED: 'NO_ACTIVE_SEED',

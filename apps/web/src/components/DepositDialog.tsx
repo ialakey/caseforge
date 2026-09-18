@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { DEPOSIT_PRESETS, translateError } from '@caseforge/shared';
 import { api, ApiError } from '../lib/api';
@@ -191,6 +192,17 @@ export function DepositDialog({ onClose }: { onClose: () => void }) {
         >
           {busy ? t('deposit.processing') : `${t('deposit.submit')} ${money(amountMinor)}`}
         </button>
+
+        {/* The other way to add balance. It belongs here rather than in the
+            navigation: a player looking for the skin route is a player who has
+            just opened the top-up dialog and found nothing they can pay with. */}
+        <Link
+          href="/deposit/items"
+          onClick={onClose}
+          className="mt-3 block text-center text-sm text-ink-muted underline-offset-4 hover:text-accent hover:underline"
+        >
+          {t('deposit.items.title')}
+        </Link>
       </div>
     </div>
   );

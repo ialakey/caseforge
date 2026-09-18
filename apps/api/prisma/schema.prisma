@@ -43,6 +43,11 @@ enum InventoryItemStatus {
 
 enum TransactionType {
   DEPOSIT
+  /// Balance that arrived as skins rather than as money. Kept apart from
+  /// DEPOSIT so a report can say what the item channel is worth on its own —
+  /// it has a different margin and a different risk, and a single line that
+  /// mixed the two could describe neither.
+  ITEM_DEPOSIT
   WITHDRAWAL_REFUND
   CASE_OPEN
   ITEM_SELL
@@ -72,6 +77,22 @@ enum BonusKind {
   DISCOUNT // a cut off the next opening, in basis points
   FREE_CASE // one free opening up to a price ceiling
   FREE_ITEM // a skin up to a price ceiling
+}
+
+/// Where a deposit of items has got to.
+///
+/// Mirrors the withdrawal states rather than inventing its own vocabulary: the
+/// two are the same trade, run in opposite directions, and an operator reading
+/// both lists should not have to learn two sets of words for "the offer is with
+/// the player".
+enum ItemDepositStatus {
+  PENDING // created; no bot has picked it up yet
+  OFFER_SENT // a bot has asked the player for the items
+  ACCEPTED // the player handed them over and the bot holds them
+  CREDITED // the balance has been credited — the only success
+  DECLINED // the player refused the offer or let it expire
+  FAILED // something broke; nothing was credited
+  CANCELLED // withdrawn by the player or an operator before it was accepted
 }
 
 enum WithdrawalStatus {
@@ -177,6 +198,7 @@ model User {
   inventory    InventoryItem[]
   transactions Transaction[]
   withdrawals  Withdrawal[]
+  itemDeposits ItemDeposit[]
   upgrades     Upgrade[]
   contracts    Contract[]
   bonuses      DailyBonus[]
@@ -233,6 +255,7 @@ model Item {
   bonusGrants     DailyBonus[]       @relation("BonusItem")
   marketPurchases MarketPurchase[]
   withdrawalLines WithdrawalItem[]
+  depositLines    ItemDepositItem[]
 
   @@index([rarity])
   @@index([isActive])
@@ -1174,6 +1197,86 @@ model MarketAccount {
   @@map("market_accounts")
 }
 
+/// A player handing skins to the site in exchange for balance.
+///
+/// The mirror image of a withdrawal, and it carries the same guarantee: the
+/// valuation is frozen when the request is made. A player who is quoted 4 200
+/// gets 4 200, even if the market moves while the offer sits in Steam waiting
+/// for them to press Accept. Re-pricing on arrival would mean the number they
+/// agreed to was never the number that mattered.
+model ItemDeposit {
+  id     String            @id @default(uuid()) @db.Uuid
+  userId String            @db.Uuid
+  status ItemDepositStatus @default(PENDING)
+
+  /// What the whole request is worth to the player, in minor units, and the
+  /// payout rate it was quoted at. The rate is recorded rather than looked up
+  /// later because an operator may change it, and a report that cannot say
+  /// which rate applied cannot explain the number it is showing.
+  totalValue Int
+  rateBps    Int
+
+  /// Where the offer goes. Copied from the player's profile at request time —
+  /// a trade URL edited mid-flight must not redirect an offer already sent.
+  tradeUrl String
+
+  botId        String? @db.Uuid
+  tradeOfferId String?
+
+  failureReason String?
+  attempts      Int     @default(0)
+
+  /// After this the offer is abandoned. Steam expires offers on its own
+  /// schedule, but a request left PENDING because no bot was free would
+  /// otherwise sit in the list for ever.
+  expiresAt DateTime
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  sentAt      DateTime?
+  completedAt DateTime?
+
+  user  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bot   SteamBot? @relation(fields: [botId], references: [id], onDelete: SetNull)
+  items ItemDepositItem[]
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@map("item_deposits")
+}
+
+/// One skin inside a deposit request.
+///
+/// The name and both prices are denormalised for the same reason a withdrawal
+/// line denormalises them: this is the record of what was agreed, and it has to
+/// stay readable after the catalogue is renamed or re-priced.
+model ItemDepositItem {
+  id        String @id @default(uuid()) @db.Uuid
+  depositId String @db.Uuid
+
+  /// The asset in the player's own Steam inventory. Unique per Steam account
+  /// and not stable across trades, which is exactly why the offer has to be
+  /// sent promptly after the quote.
+  assetId        String
+  marketHashName String
+
+  /// The catalogue row, when the site carries this skin. Null is ordinary: a
+  /// player may hand over something no case has ever contained.
+  itemId String? @db.Uuid
+
+  /// What the market said, and what the site agreed to pay for it.
+  marketPrice Int
+  payout      Int
+
+  createdAt DateTime @default(now())
+
+  deposit ItemDeposit @relation(fields: [depositId], references: [id], onDelete: Cascade)
+  item    Item?       @relation(fields: [itemId], references: [id], onDelete: SetNull)
+
+  @@index([depositId])
+  @@map("item_deposit_items")
+}
+
 model SteamBot {
   id        String    @id @default(uuid()) @db.Uuid
   steamId64 String    @unique
@@ -1197,8 +1300,9 @@ model SteamBot {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  withdrawals Withdrawal[]
-  inventory   BotInventoryItem[]
+  withdrawals  Withdrawal[]
+  itemDeposits ItemDeposit[]
+  inventory    BotInventoryItem[]
 
   @@index([status])
   @@map("steam_bots")

@@ -204,6 +204,68 @@ export interface PublicProfileView {
   drops: LiveDrop[];
 }
 
+/** One skin in the player's own Steam inventory, as the deposit page lists it. */
+export interface DepositCandidate {
+  /** The asset in the player's Steam inventory; the offer is built from these. */
+  assetId: string;
+  marketHashName: string;
+  name: string;
+  imageUrl: string | null;
+  rarity: ItemRarity;
+  exterior: string | null;
+  /** What the market says it is worth, in minor units. */
+  marketPrice: number;
+  /** What the site would credit for it, after the payout rate. */
+  payout: number;
+  /**
+   * Why it cannot be deposited, or null when it can. A skin Steam marks as
+   * untradable, or one with no price, is listed rather than hidden: a player
+   * whose knife is missing from the list needs to know it is the trade hold
+   * and not a bug.
+   */
+  blockedReason: 'untradable' | 'no-price' | null;
+}
+
+/** What the player would get for a selection, before they commit to it. */
+export interface DepositQuote {
+  items: DepositCandidate[];
+  total: number;
+  /** The payout rate the quote was made at, in basis points. */
+  rateBps: number;
+  minValue: number;
+  maxItems: number;
+}
+
+export type ItemDepositStatus =
+  | 'PENDING'
+  | 'OFFER_SENT'
+  | 'ACCEPTED'
+  | 'CREDITED'
+  | 'DECLINED'
+  | 'FAILED'
+  | 'CANCELLED';
+
+/** A deposit request as the player is shown it. */
+export interface ItemDepositView {
+  id: string;
+  status: ItemDepositStatus;
+  totalValue: number;
+  rateBps: number;
+  tradeOfferId: string | null;
+  failureReason: string | null;
+  expiresAt: string;
+  createdAt: string;
+  completedAt: string | null;
+  items: Array<{
+    assetId: string;
+    marketHashName: string;
+    imageUrl: string | null;
+    rarity: ItemRarity;
+    marketPrice: number;
+    payout: number;
+  }>;
+}
+
 /** WebSocket event names shared by the server and the client. */
 export const WS_EVENTS = {
   DROPS_BATCH: 'drops:batch',

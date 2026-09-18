@@ -425,6 +425,47 @@ export const SETTINGS = {
     label: 'Maximum top-up',
   },
 
+  'deposits.itemsEnabled': {
+    group: 'deposits',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Item deposits enabled',
+    hint: 'Players hand skins to a farm bot and are credited for them.',
+  },
+  'deposits.itemRateBps': {
+    group: 'deposits',
+    kind: 'int',
+    schema: z.coerce.number().int().min(1000).max(10_000),
+    default: 8_500,
+    label: 'Item deposit payout, basis points',
+    hint: 'What the site pays for a deposited skin as a share of its market price. 8500 = 85%. The margin covers the spread and the risk of the price moving before the skin can be sold on.',
+  },
+  'deposits.itemMinValue': {
+    group: 'deposits',
+    kind: 'money',
+    schema: bounded(1, 1_000_000_00),
+    default: 50_00,
+    label: 'Minimum value of one deposit',
+    hint: 'A trade offer costs a bot slot and an operator’s attention either way, so very small deposits are refused.',
+  },
+  'deposits.itemMaxPerOffer': {
+    group: 'deposits',
+    kind: 'int',
+    schema: z.coerce.number().int().min(1).max(100),
+    default: 20,
+    label: 'Items per deposit offer',
+    hint: 'Steam caps a trade at 255 items; a lower cap keeps one failed offer from costing a player their whole inventory.',
+  },
+  'deposits.itemOfferTtlMin': {
+    group: 'deposits',
+    kind: 'int',
+    schema: z.coerce.number().int().min(5).max(1440),
+    default: 60,
+    label: 'Deposit offer lifetime, minutes',
+    hint: 'After this a request is abandoned. The quote is frozen at request time, so a stale offer is a promise made at last hour’s prices.',
+  },
+
   'economy.sellFeeBps': {
     group: 'economy',
     kind: 'int',
