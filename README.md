@@ -99,6 +99,31 @@ prices, and that turned out to be a trap: after the very first sync the real
 Steam prices differed by an order of magnitude, cases went into loss, and
 re-running the seed silently overwrote fixes made in the CRM.
 
+#### A whole catalogue from a survey file
+
+`pnpm --filter @caseforge/api seed:catalogue` imports a catalogue described by a
+survey file — `apps/api/prisma/data/catalogue.json`: a list of shelves, and a
+list of cases with their prices and the item names they hold. It creates the
+categories, resolves every name against the Steam market, balances each loot
+table to the target RTP and saves the case through the same validation the CRM
+uses.
+
+Two things the survey cannot supply are generated. Each case is drawn its own
+SVG into `apps/web/public/cases/`, coloured by its shelf and keyed off its slug,
+because case art is not something to take from another site. Each description is
+composed from the loot table that was just balanced — how many items, which
+rarities, the top drop — because case pages elsewhere carry no prose to import.
+
+Steam answers about ten items per request and allows roughly seventeen requests
+a minute, so a full run takes upwards of an hour. The resolved pool is cached on
+disk, so an interrupted run resumes where it stopped and a second run costs no
+Steam requests at all:
+
+```bash
+pnpm --filter @caseforge/api seed:catalogue -- --group=collections --dry-run
+pnpm --filter @caseforge/api seed:catalogue            # everything not yet imported
+```
+
 ### Verification
 
 ```bash

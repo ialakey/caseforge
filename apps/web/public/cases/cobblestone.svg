@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 240" width="320" height="240" role="img" aria-labelledby="a4523t">
+  <title id="a4523t">Cobblestone</title>
+  <defs>
+    <linearGradient id="a4523bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="hsl(241 28% 22%)"/>
+      <stop offset="1" stop-color="hsl(241 28% 12%)"/>
+    </linearGradient>
+    <linearGradient id="a4523lid" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="hsl(204 42% 32%)"/>
+      <stop offset="0.5" stop-color="hsl(204 42% 46%)"/>
+      <stop offset="1" stop-color="hsl(204 42% 32%)"/>
+    </linearGradient>
+    <radialGradient id="a4523glow" cx="0.5" cy="0.42" r="0.6">
+      <stop offset="0" stop-color="hsl(204 42% 46%)" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="hsl(204 42% 46%)" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="320" height="240" fill="url(#a4523bg)"/>
+  <rect width="320" height="240" fill="url(#a4523glow)"/>
+
+  <!-- The diagonal sheen: one rotated band, tilted per case. -->
+  <g opacity="0.07">
+    <rect x="-80" y="-40" width="60" height="360" fill="#fff"
+          transform="rotate(19 160 120) translate(180 0)"/>
+    <rect x="-80" y="-40" width="24" height="360" fill="#fff"
+          transform="rotate(19 160 120) translate(268 0)"/>
+  </g>
+
+  <!-- The crate: a body, a lid band across it, and a keyhole in the middle. -->
+  <g>
+    <rect x="72" y="74" width="176" height="112" rx="10" fill="hsl(0 0% 0% / 0.28)"/>
+    <rect x="76" y="70" width="168" height="110" rx="9" fill="hsl(241 28% 12%)"
+          stroke="hsl(0 0% 100% / 0.16)" stroke-width="2"/>
+    <rect x="76" y="70" width="168" height="30" rx="9" fill="url(#a4523lid)"/>
+    <rect x="76" y="98" width="168" height="3" fill="hsl(0 0% 0% / 0.35)"/>
+    <rect x="150" y="100" width="20" height="26" rx="4" fill="hsl(204 42% 46%)" opacity="0.9"/>
+    <circle cx="160" cy="113" r="4.5" fill="hsl(241 28% 12%)"/>
+  </g>
+
+  <text x="160" y="160" text-anchor="middle"
+        font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+        font-size="40" font-weight="700" letter-spacing="2"
+        fill="hsl(0 0% 100% / 0.92)">CO</text>
+
+  <g>
+    <text x="112" y="200" text-anchor="end"
+          font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
+          font-size="13" font-weight="600" letter-spacing="1.5"
+          fill="hsl(0 0% 100% / 0.5)">COLLECTIONS</text>
+    <circle cx="124" cy="196" r="4.5" fill="hsl(204 42% 46%)"/><circle cx="142" cy="196" r="4.5" fill="hsl(204 42% 46%)"/><circle cx="160" cy="196" r="4.5" fill="hsl(204 42% 46%)"/><circle cx="178" cy="196" r="4.5" fill="hsl(204 42% 46%)"/><circle cx="196" cy="196" r="4.5" fill="hsl(0 0% 100% / 0.14)"/>
+  </g>
+</svg>

@@ -39,3 +39,6 @@ pnpm-debug.log*
 # local scratch notes
 task.txt
 docs/habr-*.ru.md
+
+# survey pool cache: rebuildable from Steam, and large
+apps/api/prisma/data/.cache/
