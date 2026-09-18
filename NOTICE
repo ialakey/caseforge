@@ -1,0 +1,31 @@
+Required Notice: Copyright 2026 ialakey (https://github.com/ialakey/caseforge)
+
+CaseForge — a CS2 case-opening platform.
+Source: https://github.com/ialakey/caseforge
+Author: ialakey <prosoulk2017@gmail.com>
+
+--------------------------------------------------------------------------------
+
+This project is licensed under the PolyForm Noncommercial License 1.0.0. See
+LICENSE for the full terms; the short version is:
+
+  * Noncommercial use is free — personal projects, study, research, hobby work,
+    and use by charities, schools, public research bodies and governments.
+
+  * Commercial use requires the author's written permission. Running this
+    software, or anything derived from it, as part of a business or for revenue
+    is not covered by the licence on its own. Ask first: prosoulk2017@gmail.com
+
+  * The notice above is a licence term, not a courtesy. Under the "Notices"
+    section of the licence, anyone who passes on any part of this software must
+    also pass on this file and every line beginning with "Required Notice:".
+    Keep the copyright line and the link to the source repository intact and
+    visible — in the LICENSE and NOTICE files you ship, and in the credits or
+    footer of anything you deploy from it.
+
+--------------------------------------------------------------------------------
+
+A note on history: releases published before this change were distributed under
+the MIT License. A licence change is not retroactive, so those earlier versions
+remain available under MIT to anyone who obtained them. Everything from this
+commit onwards is covered by the terms above.

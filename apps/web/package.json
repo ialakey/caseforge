@@ -1,6 +1,13 @@
 {
   "name": "@caseforge/web",
   "version": "0.1.0",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "author": "ialakey <prosoulk2017@gmail.com> (https://github.com/ialakey)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ialakey/caseforge.git"
+  },
+  "homepage": "https://github.com/ialakey/caseforge",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",

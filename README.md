@@ -929,5 +929,23 @@ for how to get the project running and what the review looks for.
 
 ## License
 
-[MIT](LICENSE). Do what you like with it; the legal note above still applies to
-running it for real money.
+[PolyForm Noncommercial 1.0.0](LICENSE), with a required attribution notice —
+see [NOTICE](NOTICE).
+
+**Noncommercial use is free**: personal projects, study, research, hobby work,
+and use by charities, schools, public research bodies and governments.
+
+**Commercial use needs written permission** from the author. Running this, or
+anything derived from it, as a business or for revenue is not covered by the
+licence on its own — ask first: <prosoulk2017@gmail.com>.
+
+**The attribution is a licence term, not a courtesy.** Under the licence's
+Notices section, anyone passing on any part of this software must also pass on
+the `Required Notice:` line and the link to this repository, and keep them
+visible in whatever they ship or deploy.
+
+Releases published before this change went out under MIT. A licence change is
+not retroactive, so those versions stay MIT for anyone who already has them;
+everything from that commit onwards is under the terms above.
+
+The legal note further up still applies to running any of it for real money.
