@@ -85,6 +85,18 @@ enum BonusKind {
 /// two are the same trade, run in opposite directions, and an operator reading
 /// both lists should not have to learn two sets of words for "the offer is with
 /// the player".
+/// How far a money top-up has got.
+///
+/// Deliberately short. A payment provider has a dozen intermediate states and
+/// none of them changes what this site does: either the money arrived and the
+/// balance moves, or it did not.
+enum PaymentStatus {
+  PENDING // created with the provider; the player is at their checkout
+  SUCCEEDED // confirmed and credited
+  FAILED // the provider said no
+  CANCELLED // abandoned by the player, or expired
+}
+
 enum ItemDepositStatus {
   PENDING // created; no bot has picked it up yet
   OFFER_SENT // a bot has asked the player for the items
@@ -199,6 +211,7 @@ model User {
   transactions Transaction[]
   withdrawals  Withdrawal[]
   itemDeposits ItemDeposit[]
+  payments     Payment[]
   upgrades     Upgrade[]
   contracts    Contract[]
   bonuses      DailyBonus[]
@@ -1195,6 +1208,50 @@ model MarketAccount {
 
   @@index([status])
   @@map("market_accounts")
+}
+
+/// One attempt to put money on a balance.
+///
+/// The row exists before the player reaches a checkout and survives whatever
+/// happens there, which is the point: a provider that confirms a payment twice,
+/// or confirms one the site never heard of, meets a record that already knows
+/// its own state. Crediting is a transition of this row and nothing else.
+model Payment {
+  id       String        @id @default(uuid()) @db.Uuid
+  userId   String        @db.Uuid
+  status   PaymentStatus @default(PENDING)
+  /// Which adapter created it. A string rather than an enum: adding a provider
+  /// should not be a migration, and the value is only ever compared to the
+  /// adapter registry at runtime.
+  provider String
+
+  /// What the player pays, and what lands on the balance — a promotion can
+  /// make the second larger, and a report that could not tell them apart could
+  /// not say what the promotion cost.
+  amount Int
+  bonus  Int @default(0)
+
+  /// The provider's own id for this payment. Unique per provider, and the key
+  /// a webhook is matched on.
+  providerRef String?
+
+  /// What the provider last said, kept verbatim for support to read. Never
+  /// parsed for meaning after the fact.
+  providerStatus String?
+  failureReason  String?
+
+  promoCode String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerRef])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("payments")
 }
 
 /// A player handing skins to the site in exchange for balance.
