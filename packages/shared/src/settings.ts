@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BATTLE_MAX_PLAYERS, BATTLE_MAX_ROUNDS, BATTLE_MIN_PLAYERS } from './battle.ts';
 import { WHEEL_SEGMENTS, wheelSegmentsSchema } from './bonus.ts';
 import { WITHDRAWAL_PROVIDERS } from './market.ts';
 
@@ -23,6 +24,8 @@ export const SETTING_GROUPS = [
   'economy',
   'limits',
   'bonus',
+  'battles',
+  'referral',
   'withdrawals',
 ] as const;
 export type SettingGroup = (typeof SETTING_GROUPS)[number];
@@ -123,6 +126,71 @@ export const SETTINGS = {
     default: WHEEL_SEGMENTS,
     label: 'Wheel slices',
     hint: 'Shares must add up to 1. Ticket ranges are recomputed on save.',
+  },
+
+  'battles.enabled': {
+    group: 'battles',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Case battles enabled',
+    hint: 'Switching it off hides the lobby and refuses new battles. Battles already waiting for seats are refunded by the sweeper.',
+  },
+  'battles.maxPlayers': {
+    group: 'battles',
+    kind: 'int',
+    schema: bounded(BATTLE_MIN_PLAYERS, BATTLE_MAX_PLAYERS),
+    default: BATTLE_MAX_PLAYERS,
+    label: 'Seats per battle, maximum',
+  },
+  'battles.maxRounds': {
+    group: 'battles',
+    kind: 'int',
+    schema: bounded(1, BATTLE_MAX_ROUNDS),
+    default: BATTLE_MAX_ROUNDS,
+    label: 'Rounds per battle, maximum',
+    hint: `Rounds times seats is how many openings settle in one transaction; the hard ceiling is ${BATTLE_MAX_ROUNDS}.`,
+  },
+  'battles.waitMinutes': {
+    group: 'battles',
+    kind: 'int',
+    schema: bounded(1, 24 * 60),
+    default: 15,
+    label: 'Cancel an unfilled battle after, minutes',
+    hint: 'Every seat is refunded in full. A battle nobody joins must not hold the host money indefinitely.',
+  },
+
+  'referral.enabled': {
+    group: 'referral',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Referrals enabled',
+    hint: 'Switching it off stops new bindings and stops accruing commission. Whatever was already accrued stays claimable.',
+  },
+  'referral.depositBps': {
+    group: 'referral',
+    kind: 'int',
+    schema: bounded(0, 5_000),
+    default: 500,
+    label: 'Commission on a top-up, basis points',
+    hint: '500 bps = 5% of what an invited player tops up.',
+  },
+  'referral.wagerBps': {
+    group: 'referral',
+    kind: 'int',
+    schema: bounded(0, 1_000),
+    default: 100,
+    label: 'Commission on a wager, basis points',
+    hint: 'Charged on what an invited player pays for the cases they open, a battle seat included. It comes out of the margin, so it has to stay well under it — 100 bps = 1%.',
+  },
+  'referral.minClaim': {
+    group: 'referral',
+    kind: 'money',
+    schema: bounded(0, 100_000_00),
+    default: 100_00,
+    label: 'Smallest payout',
+    hint: 'Below this the pot keeps accruing. Zero lets anything be claimed.',
   },
 
   'withdrawals.provider': {

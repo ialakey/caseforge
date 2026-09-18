@@ -13,6 +13,8 @@ export * from './upgrade.ts';
 export * from './contract.ts';
 export * from './inventory.ts';
 export * from './bonus.ts';
+export * from './battle.ts';
+export * from './referral.ts';
 export * from './promo.ts';
 export * from './settings.ts';
 export * from './money.ts';

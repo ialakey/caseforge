@@ -121,4 +121,10 @@ export const WS_EVENTS = {
   DROPS_BATCH: 'drops:batch',
   BALANCE_UPDATED: 'user:balance',
   WITHDRAWAL_UPDATED: 'user:withdrawal',
+  /**
+   * A battle appeared, filled a seat, was played or was called off. Broadcast
+   * to everybody: the lobby is a shared room, and a seat taken in one tab has
+   * to disappear from every other one.
+   */
+  BATTLE_UPDATED: 'battle:updated',
 } as const;
