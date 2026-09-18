@@ -42,3 +42,7 @@ docs/habr-*.ru.md
 
 # survey pool cache: rebuildable from Steam, and large
 apps/api/prisma/data/.cache/
+
+# KYC document storage: keep passport scans out of git
+apps/api/var/
+var/kyc/

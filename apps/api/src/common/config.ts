@@ -33,6 +33,15 @@ const envSchema = z.object({
   CURRENCY: z.string().default('RUB'),
 
   /**
+   * Where identity documents are written.
+   *
+   * A directory and not a database column: passport scans in Postgres are
+   * passport scans in every backup, replica and slow-query log. Keeping them
+   * on a volume puts encryption at rest where it can actually be arranged.
+   */
+  KYC_STORAGE_DIR: z.string().default('./var/kyc'),
+
+  /**
    * Stub top-up: credits the entered amount with no payment at all.
    * It exists so the gameplay loop can be exercised before payments are wired
    * in. Disabled by default in production and enabled only by an explicit

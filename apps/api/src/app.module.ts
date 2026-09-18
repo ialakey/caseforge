@@ -14,6 +14,7 @@ import { DropsModule } from './drops/drops.module';
 import { WithdrawalsModule } from './withdrawals/withdrawals.module';
 import { ItemDepositsModule } from './deposits/item-deposits.module';
 import { PaymentsModule } from './payments/payments.module';
+import { KycModule } from './kyc/kyc.module';
 import { UpgradeModule } from './upgrade/upgrade.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { BonusModule } from './bonus/bonus.module';
@@ -38,6 +39,7 @@ import { AdminModule } from './admin/admin.module';
     WithdrawalsModule,
     ItemDepositsModule,
     PaymentsModule,
+    KycModule,
     UpgradeModule,
     ContractsModule,
     BonusModule,

@@ -466,6 +466,23 @@ export const SETTINGS = {
     hint: 'After this a request is abandoned. The quote is frozen at request time, so a stale offer is a promise made at last hour’s prices.',
   },
 
+  'kyc.enabled': {
+    group: 'withdrawals',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: false,
+    label: 'Identity checks enabled',
+    hint: 'Off by default: collecting identity documents is a legal commitment, not a feature to switch on absent-mindedly. With it off nothing is asked for and nothing is stored.',
+  },
+  'kyc.withdrawalThreshold': {
+    group: 'withdrawals',
+    kind: 'money',
+    schema: bounded(0, 10_000_000_00),
+    default: 50_000_00,
+    label: 'Verification required above',
+    hint: 'Cumulative value withdrawn, over the player’s lifetime. Once they pass this, further withdrawals wait for an approved identity check. Zero means every withdrawal needs one.',
+  },
+
   'economy.sellFeeBps': {
     group: 'economy',
     kind: 'int',

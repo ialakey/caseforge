@@ -9,6 +9,7 @@ import { Queue } from 'bullmq';
 import { ErrorCode, type WithdrawalProvider } from '@caseforge/shared';
 import { PrismaService } from '../common/prisma.service';
 import { SettingsService } from '../common/settings.service';
+import { KycService } from '../kyc/kyc.service';
 import { badRequest } from '../common/app-error';
 
 export const WITHDRAWAL_QUEUE = 'withdrawals';
@@ -24,6 +25,7 @@ export class WithdrawalsService implements OnModuleDestroy {
   constructor(
     private readonly prisma: PrismaService,
     private readonly settings: SettingsService,
+    private readonly kyc: KycService,
   ) {
     const url = new URL(process.env.REDIS_URL ?? 'redis://localhost:6380');
     this.queue = new Queue(WITHDRAWAL_QUEUE, {
@@ -82,6 +84,14 @@ export class WithdrawalsService implements OnModuleDestroy {
       }
 
       const totalValue = items.reduce((sum, i) => sum + i.acquiredPrice, 0);
+
+      // The identity gate, checked with the total in hand and before anything
+      // is locked. Inside the transaction so a player cannot get two requests
+      // past the same remaining allowance by sending them at once.
+      const verdict = await this.kyc.mayWithdraw(userId, totalValue);
+      if (!verdict.allowed) {
+        throw badRequest(ErrorCode.KYC_REQUIRED, verdict.reason ?? 'Identity verification required');
+      }
 
       const created = await tx.withdrawal.create({
         data: { userId, totalValue, tradeUrl: user.tradeUrl!, status: 'PENDING', provider },

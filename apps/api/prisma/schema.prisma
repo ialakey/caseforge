@@ -90,6 +90,23 @@ enum BonusKind {
 /// Deliberately short. A payment provider has a dozen intermediate states and
 /// none of them changes what this site does: either the money arrived and the
 /// balance moves, or it did not.
+/// How far a player's identity check has got.
+enum KycStatus {
+  NONE // never applied
+  PENDING // submitted, waiting for an operator
+  APPROVED
+  REJECTED
+}
+
+/// What a submitted document claims to be.
+enum KycDocumentKind {
+  PASSPORT
+  ID_CARD
+  DRIVING_LICENCE
+  SELFIE
+  PROOF_OF_ADDRESS
+}
+
 enum PaymentStatus {
   PENDING // created with the provider; the player is at their checkout
   SUCCEEDED // confirmed and credited
@@ -212,6 +229,8 @@ model User {
   withdrawals  Withdrawal[]
   itemDeposits ItemDeposit[]
   payments     Payment[]
+  kyc          KycApplication?  @relation("KycSubject")
+  kycReviews   KycApplication[] @relation("KycReviewer")
   upgrades     Upgrade[]
   contracts    Contract[]
   bonuses      DailyBonus[]
@@ -1208,6 +1227,70 @@ model MarketAccount {
 
   @@index([status])
   @@map("market_accounts")
+}
+
+/// A player's identity check, reviewed by an operator.
+///
+/// One row per player, rewritten on each attempt rather than one row per
+/// attempt: what matters operationally is the current standing, and the
+/// history of rejections is in the audit log where every other operator
+/// decision lives.
+///
+/// Everything here is personal data the site would rather not hold. It is held
+/// because a withdrawal above a threshold cannot be paid out without it, and it
+/// is kept as thin as that purpose allows — no more fields than an operator
+/// needs to say yes or no.
+model KycApplication {
+  id     String    @id @default(uuid()) @db.Uuid
+  userId String    @unique @db.Uuid
+  status KycStatus @default(PENDING)
+
+  fullName    String
+  dateOfBirth DateTime
+  /// ISO 3166-1 alpha-2.
+  country     String
+  documentNo  String
+
+  /// Who decided, and why. The note is shown to the player on a rejection:
+  /// "rejected" with no reason is an invitation to submit the same thing again.
+  reviewedById String?   @db.Uuid
+  reviewNote   String?
+  reviewedAt   DateTime?
+
+  submittedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user       User          @relation("KycSubject", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedBy User?         @relation("KycReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  documents  KycDocument[]
+
+  @@index([status, submittedAt])
+  @@map("kyc_applications")
+}
+
+/// One uploaded document.
+///
+/// The bytes are not in the database. The row carries a path inside a
+/// configured directory, which keeps scans of passports out of every backup,
+/// replica and log that touches Postgres — and puts the burden of encrypting
+/// them at rest on the volume, where it belongs.
+model KycDocument {
+  id            String          @id @default(uuid()) @db.Uuid
+  applicationId String          @db.Uuid
+  kind          KycDocumentKind
+
+  /// Relative to KYC_STORAGE_DIR. Never an absolute path and never
+  /// user-controlled — it is generated, so a stored value cannot traverse.
+  storagePath String
+  contentType String
+  byteSize    Int
+
+  createdAt DateTime @default(now())
+
+  application KycApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@map("kyc_documents")
 }
 
 /// One attempt to put money on a balance.

@@ -26,6 +26,12 @@ export const ErrorCode = {
   DEPOSIT_IN_PROGRESS: 'DEPOSIT_IN_PROGRESS',
   /** No farm bot is online and has room for the items. */
   NO_BOT_AVAILABLE: 'NO_BOT_AVAILABLE',
+  /** Identity checks are not in use on this deployment. */
+  KYC_DISABLED: 'KYC_DISABLED',
+  /** The date of birth given is under eighteen. */
+  KYC_UNDERAGE: 'KYC_UNDERAGE',
+  /** A withdrawal past the threshold without a verified identity. */
+  KYC_REQUIRED: 'KYC_REQUIRED',
   BATCH_SIZE_INVALID: 'BATCH_SIZE_INVALID',
   ACCOUNT_BANNED: 'ACCOUNT_BANNED',
   NO_ACTIVE_SEED: 'NO_ACTIVE_SEED',
