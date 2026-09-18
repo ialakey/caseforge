@@ -16,6 +16,8 @@ import { UpgradeModule } from './upgrade/upgrade.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { BonusModule } from './bonus/bonus.module';
 import { PromoModule } from './promo/promo.module';
+import { BattlesModule } from './battles/battles.module';
+import { ReferralModule } from './referral/referral.module';
 import { AdminModule } from './admin/admin.module';
 
 @Module({
@@ -35,6 +37,8 @@ import { AdminModule } from './admin/admin.module';
     ContractsModule,
     BonusModule,
     PromoModule,
+    BattlesModule,
+    ReferralModule,
     AdminModule,
   ],
   providers: [

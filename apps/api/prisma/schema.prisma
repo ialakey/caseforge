@@ -42,6 +42,13 @@ enum TransactionType {
   ITEM_SELL
   ADMIN_ADJUSTMENT
   BONUS
+  /// A seat in a case battle. Economically a case purchase, kept apart so a
+  /// report can tell how much of the turnover the lobby brings in.
+  BATTLE_ENTRY
+  /// A battle that never filled, given back in full.
+  BATTLE_REFUND
+  /// A referral commission paid out of the pending pot onto the balance.
+  REFERRAL
 }
 
 enum UpgradeStatus {
@@ -81,6 +88,23 @@ enum WithdrawalProvider {
   BOTS // handed out of the Steam bot farm's own inventory
 }
 
+enum BattleStatus {
+  WAITING // created and paid for by the host, seats still open
+  RUNNING // full; the rounds are being rolled. A very short state
+  FINISHED
+  CANCELLED // abandoned before it filled — every seat refunded
+}
+
+enum BattleMode {
+  STANDARD // the biggest total takes everything
+  CRAZY // the smallest total takes everything
+}
+
+enum ReferralEarningKind {
+  DEPOSIT // a share of a top-up the invited player made
+  WAGER // a share of the case prices they opened, battles included
+}
+
 enum MarketAccountStatus {
   OFFLINE // registered, not checked yet
   ONLINE // answering and able to buy
@@ -118,6 +142,12 @@ model User {
   isBanned  Boolean @default(false)
   banReason String?
 
+  /// The player's own invite code. Nullable because accounts created before
+  /// referrals existed have none; it is minted on the first read rather than
+  /// backfilled, so an account that never opens the referral page never gets
+  /// a code it does not use.
+  referralCode String? @unique
+
   /// When the daily wheel was last span. Denormalised on purpose: the cooldown
   /// is claimed with a conditional UPDATE on this column, which is what makes
   /// two simultaneous spins impossible without a lock.
@@ -146,6 +176,19 @@ model User {
   bonuses      DailyBonus[]
   promoUses    PromoRedemption[]
   auditLogs    AuditLog[]      @relation("AuditActor")
+
+  battlesHosted Battle[]       @relation("BattleHost")
+  battlesWon    Battle[]       @relation("BattleWinner")
+  battleSeats   BattlePlayer[]
+
+  /// The players this account invited, and the one invite it was itself
+  /// bound to. The second side is a single row on purpose: one inviter per
+  /// player, set once at sign-up and never edited.
+  invited   Referral[] @relation("ReferralInviter")
+  invitedBy Referral?  @relation("ReferralInvitee")
+
+  referralEarnings ReferralEarning[] @relation("ReferralEarner")
+  referralSourced  ReferralEarning[] @relation("ReferralSource")
 
   @@index([createdAt])
   @@index([role])
@@ -212,8 +255,9 @@ model Case {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  items    CaseItem[]
-  openings CaseOpening[]
+  items       CaseItem[]
+  openings    CaseOpening[]
+  battleLines BattleCase[]
 
   @@index([isActive, sortOrder])
   @@map("cases")
@@ -305,6 +349,18 @@ model CaseOpening {
   casePrice Int
   itemPrice Int
 
+  /// The battle this opening belongs to, and which of its rounds it was.
+  ///
+  /// A battle drop is not a separate kind of event: it is an opening like any
+  /// other, paid for at the list price and rolled from the opening player's own
+  /// seed pair. Recording it here rather than in a table of its own is what
+  /// keeps one set of numbers — the RTP report, the drop feed and the player's
+  /// own verifiable history all pick battles up without knowing about them.
+  /// The item itself may well end up in somebody else's inventory, which is
+  /// the only thing a battle actually changes.
+  battleId    String? @db.Uuid
+  battleRound Int?
+
   createdAt DateTime @default(now())
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -312,6 +368,7 @@ model CaseOpening {
   item       Item       @relation(fields: [itemId], references: [id], onDelete: Restrict)
   serverSeed ServerSeed @relation(fields: [serverSeedId], references: [id], onDelete: Restrict)
   clientSeed ClientSeed @relation(fields: [clientSeedId], references: [id], onDelete: Restrict)
+  battle     Battle?    @relation(fields: [battleId], references: [id], onDelete: Cascade)
 
   inventoryItem InventoryItem?
 
@@ -320,6 +377,8 @@ model CaseOpening {
   @@index([userId, createdAt])
   @@index([caseId, createdAt])
   @@index([createdAt])
+  /// The battle view's only read: every drop in one battle, in play order.
+  @@index([battleId, battleRound])
   @@map("case_openings")
 }
 
@@ -573,6 +632,178 @@ model PromoRedemption {
   @@index([promoCodeId, userId])
   @@index([userId, createdAt])
   @@map("promo_redemptions")
+}
+
+/// One case battle: the same list of cases, opened by several players at once.
+///
+/// The row is the agreement, not the outcome. What actually happened lives in
+/// the `CaseOpening` rows that point back here — a battle stores only what the
+/// openings cannot say for themselves: how many seats there were, what one cost,
+/// and which of them ended up with the items.
+model Battle {
+  id     String       @id @default(uuid()) @db.Uuid
+  hostId String       @db.Uuid
+  status BattleStatus @default(WAITING)
+  mode   BattleMode   @default(STANDARD)
+
+  slots Int
+
+  /// Denormalised seat counter. The seats are the `players` rows, and they
+  /// remain the source of truth; this exists so a join can be claimed with a
+  /// conditional UPDATE instead of counting rows and then inserting — between
+  /// a count and an insert two players fired together both see the last seat
+  /// free and both take it.
+  filledSlots Int @default(0)
+
+  /// Rounds and the price of one seat, both fixed when the battle is created.
+  /// Stored rather than recomputed from the case list: a case re-priced while
+  /// the battle waits must not change what the people already in it agreed to.
+  rounds     Int
+  entryPrice Int
+
+  /// What everything dropped was worth, and who took it. Null until it is played.
+  totalValue Int?
+  winnerId   String? @db.Uuid
+
+  /// Why it was called off — an operator switching battles off, the sweeper, or
+  /// the host changing their mind.
+  cancelReason String?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  host   User  @relation("BattleHost", fields: [hostId], references: [id], onDelete: Cascade)
+  winner User? @relation("BattleWinner", fields: [winnerId], references: [id], onDelete: SetNull)
+
+  cases    BattleCase[]
+  players  BattlePlayer[]
+  openings CaseOpening[]
+
+  /// The lobby's read: everything still open, newest first.
+  @@index([status, createdAt])
+  @@index([hostId, createdAt])
+  @@map("battles")
+}
+
+/// One line of a battle's case list: a case and how many rounds it is worth.
+model BattleCase {
+  id       String @id @default(uuid()) @db.Uuid
+  battleId String @db.Uuid
+  caseId   String @db.Uuid
+
+  /// Where the line sits in the list. The order is the host's and is visible in
+  /// the lobby before anyone pays, so it is stored rather than sorted: a battle
+  /// whose rounds were silently reordered is a different battle from the one
+  /// people joined.
+  position Int
+  count    Int
+
+  /// The list price at the moment the battle was created — the same figure
+  /// `entryPrice` was summed from.
+  price Int
+
+  battle Battle @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Restrict)
+
+  @@unique([battleId, position])
+  /// A case appears once per battle; a second round of it is `count`, not a
+  /// second line, or the two would disagree about how many rounds it is worth.
+  @@unique([battleId, caseId])
+  @@map("battle_cases")
+}
+
+/// One seat in a battle.
+model BattlePlayer {
+  id       String @id @default(uuid()) @db.Uuid
+  battleId String @db.Uuid
+  userId   String @db.Uuid
+
+  /// 1-based, in the order the seats were taken. It is also the tiebreak of
+  /// last resort, which is why it has to be stable.
+  slot Int
+
+  /// The sum of this seat's drops, written when the battle is settled.
+  totalValue Int     @default(0)
+  isWinner   Boolean @default(false)
+
+  joinedAt DateTime @default(now())
+
+  battle Battle @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// One seat per player: a battle against yourself is not a battle.
+  @@unique([battleId, userId])
+  @@unique([battleId, slot])
+  @@index([userId, joinedAt])
+  @@map("battle_players")
+}
+
+/// Who invited whom. Written once, at the moment the invite is applied.
+model Referral {
+  id         String @id @default(uuid()) @db.Uuid
+  referrerId String @db.Uuid
+
+  /// Unique, and that uniqueness is the whole rule: one inviter per player,
+  /// forever. Re-pointing a referral is a support ticket, not a feature.
+  refereeId String @unique @db.Uuid
+
+  /// The code as it was used. Denormalised because the inviter may rename their
+  /// code later, and a binding has to keep explaining itself.
+  code String
+
+  /// The invited account registered from the same address as the inviter. Not a
+  /// refusal — households and mobile carriers share addresses — but the classic
+  /// shape of a self-referral, so it is flagged for an operator to judge.
+  sameIp Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  referrer User @relation("ReferralInviter", fields: [referrerId], references: [id], onDelete: Cascade)
+  referee  User @relation("ReferralInvitee", fields: [refereeId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId, createdAt])
+  @@map("referrals")
+}
+
+/// One commission accrual.
+///
+/// Money the inviter has earned but has not been paid: it is not on any balance
+/// and not in the ledger until it is claimed. That is deliberate — a commission
+/// on every opening would otherwise mean a `Transaction` row per opening per
+/// inviter, and the ledger is what the nightly reconciliation walks. Accruing
+/// here and paying out in one entry keeps the ledger proportional to the number
+/// of payouts rather than to the number of drops.
+model ReferralEarning {
+  id         String              @id @default(uuid()) @db.Uuid
+  referrerId String              @db.Uuid
+  refereeId  String              @db.Uuid
+  kind       ReferralEarningKind
+
+  /// What it was charged on, the rate at the time, and the result. The rate is
+  /// stored because it is a setting: an operator lowering it must not rewrite
+  /// what was already earned.
+  sourceAmount Int
+  rateBps      Int
+  amount       Int
+
+  /// The opening, battle or deposit that produced it.
+  referenceId String?
+
+  /// Null while it is still pending; set when it is paid onto the balance.
+  claimedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  referrer User @relation("ReferralEarner", fields: [referrerId], references: [id], onDelete: Cascade)
+  referee  User @relation("ReferralSource", fields: [refereeId], references: [id], onDelete: Cascade)
+
+  /// The payout's hot read: everything this inviter is still owed.
+  @@index([referrerId, claimedAt])
+  @@index([referrerId, createdAt])
+  @@index([refereeId, createdAt])
+  @@map("referral_earnings")
 }
 
 model Transaction {

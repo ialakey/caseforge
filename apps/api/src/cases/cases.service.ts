@@ -27,6 +27,7 @@ import { badRequest, forbidden, notFound } from '../common/app-error';
 import { REDIS_CLIENT } from '../common/redis.module';
 import { DropsService } from '../drops/drops.service';
 import { BonusService } from '../bonus/bonus.service';
+import { ReferralService } from '../referral/referral.service';
 import { SettingsService } from '../common/settings.service';
 
 /**
@@ -46,6 +47,7 @@ export class CasesService {
     private readonly prisma: PrismaService,
     private readonly drops: DropsService,
     private readonly bonus: BonusService,
+    private readonly referral: ReferralService,
     private readonly settings: SettingsService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
@@ -215,6 +217,11 @@ export class CasesService {
         },
       });
 
+      // A referral commission on what was actually charged, accrued in the
+      // same transaction as the debit. It costs one indexed lookup per
+      // opening, and only for players somebody invited.
+      await this.referral.accrueWager(tx, userId, totalPrice, drops[0]!.openingId);
+
       return {
         drops,
         balanceAfter,
@@ -304,7 +311,12 @@ export class CasesService {
     }
   }
 
-  private toCaseView(source: CaseWithItems): CaseView {
+  /**
+   * Public because a case battle renders the same catalogue view: the reel it
+   * draws is the case's contents, and a second mapper for the same shape is
+   * how the two views start to disagree about a chance.
+   */
+  toCaseView(source: CaseWithItems): CaseView {
     return {
       id: source.id,
       slug: source.slug,
@@ -317,7 +329,7 @@ export class CasesService {
     };
   }
 
-  private toCaseItemView(caseItem: CaseItem & { item: Item }) {
+  toCaseItemView(caseItem: CaseItem & { item: Item }) {
     return {
       id: caseItem.id,
       itemId: caseItem.itemId,

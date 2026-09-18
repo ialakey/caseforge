@@ -12,6 +12,7 @@ import { loadConfig } from '../common/config';
 import { badRequest, forbidden } from '../common/app-error';
 import { SettingsService } from '../common/settings.service';
 import { PromoService } from '../promo/promo.service';
+import { ReferralService } from '../referral/referral.service';
 
 @Injectable()
 export class UsersService {
@@ -22,6 +23,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly settings: SettingsService,
     private readonly promo: PromoService,
+    private readonly referral: ReferralService,
   ) {}
 
   /**
@@ -70,7 +72,7 @@ export class UsersService {
         select: { balance: true },
       });
 
-      await tx.transaction.create({
+      const entry = await tx.transaction.create({
         data: {
           userId,
           type: 'DEPOSIT',
@@ -79,6 +81,11 @@ export class UsersService {
           comment: 'Top-up (stub, no real payment)',
         },
       });
+
+      // The inviter's share is charged on what the player paid, not on what
+      // the promo code added on top: a promotion the site funded is not
+      // turnover, and paying commission on it would mean paying it twice.
+      await this.referral.accrueDeposit(tx, userId, amount, entry.id);
 
       // The bonus is its own ledger row rather than being folded into the
       // deposit: what the player paid and what the promotion gave them are
