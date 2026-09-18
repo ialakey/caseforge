@@ -297,6 +297,26 @@ model Case {
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
 
+  /// A free case: it costs nothing, and what rations it is a deposit
+  /// requirement and a cooldown rather than a price.
+  ///
+  /// A flag rather than an inference from `price == 0`, because the two are
+  /// different claims. A price of zero is an accident waiting to happen — a
+  /// mis-typed field, a solver that clamped — and it would silently turn a
+  /// paid case into a giveaway. This has to be switched on deliberately.
+  isFree Boolean @default(false)
+
+  /// How much the player must have topped up over the last 24 hours to unlock
+  /// it, in minor units. Zero means anyone may open it.
+  ///
+  /// A rolling window rather than a lifetime total: the point of a free case
+  /// is to reward topping up now, and a player who deposited once a year ago
+  /// should not collect a knife every day forever on the strength of it.
+  freeMinDeposit Int @default(0)
+
+  /// How many times it may be opened within a rolling 24 hours.
+  freeMaxOpens Int @default(1)
+
   /// Which shelf it sits on. Nullable: a case without a category is not a
   /// broken case, it is an ungrouped one, and it still has to render.
   categoryId String? @db.Uuid
@@ -432,6 +452,10 @@ model CaseOpening {
   @@index([userId, createdAt])
   @@index([caseId, createdAt])
   @@index([createdAt])
+  /// The free-case cooldown: how many times this player opened this one case
+  /// in the last 24 hours. Asked on every visit to a free case's page, and
+  /// neither of the indexes above narrows by both columns.
+  @@index([userId, caseId, createdAt])
   /// The battle view's only read: every drop in one battle, in play order.
   @@index([battleId, battleRound])
   @@map("case_openings")
@@ -962,6 +986,9 @@ model Transaction {
   @@index([userId, createdAt])
   @@index([type, createdAt])
   @@index([createdAt])
+  /// The free-case gate: how much this player topped up in the last 24 hours.
+  /// Narrowing by type as well is what keeps it off a player's whole history.
+  @@index([userId, type, createdAt])
   @@map("transactions")
 }
 

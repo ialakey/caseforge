@@ -7,7 +7,7 @@ import {
   importItemsSchema,
   paginationSchema,
   steamSearchSchema,
-  upsertCaseSchema,
+  upsertCaseChecked,
   upsertCaseCategorySchema,
   upsertPromoCodeSchema,
   settingDefinitions,
@@ -240,7 +240,7 @@ export class AdminController {
   @Roles(UserRole.ADMIN)
   upsertCase(
     @CurrentUser() actor: AuthenticatedUser,
-    @Body(new ZodValidationPipe(upsertCaseSchema)) body: UpsertCaseInput,
+    @Body(new ZodValidationPipe(upsertCaseChecked)) body: UpsertCaseInput,
     @Req() request: FastifyRequest,
   ) {
     return this.admin.upsertCase(actor.id, body, request.ip ?? null);

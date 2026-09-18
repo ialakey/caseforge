@@ -150,19 +150,29 @@ export class AdminService {
     // loss, and that has to be caught here rather than in a report a month
     // later. The client shows the same number using the same function, but the
     // client cannot be trusted.
+    //
+    // A free case has none. RTP is what comes back per unit staked, and
+    // nothing is staked — the ratio is a division by zero, and judging it
+    // would refuse every free case ever created. What rations a free case is
+    // the deposit requirement and the cooldown, checked when it is opened
+    // rather than when it is saved.
     const priceById = new Map(items.map((i) => [i.id, CasesService.resolvePrice(i)] as const));
-    const plannedRtp = calculateRtp(
-      input.items.map((i) => ({
-        rangeFrom: i.rangeFrom,
-        rangeTo: i.rangeTo,
-        price: priceById.get(i.itemId) ?? 0,
-      })),
-      input.price,
-    );
+    const plannedRtp = input.isFree
+      ? null
+      : calculateRtp(
+          input.items.map((i) => ({
+            rangeFrom: i.rangeFrom,
+            rangeTo: i.rangeTo,
+            price: priceById.get(i.itemId) ?? 0,
+          })),
+          input.price,
+        );
 
-    const verdict = judgeRtp(plannedRtp);
-    if (!verdict.allowed) {
-      throw new BadRequestException({ message: verdict.message, rtp: plannedRtp });
+    if (plannedRtp !== null) {
+      const verdict = judgeRtp(plannedRtp);
+      if (!verdict.allowed) {
+        throw new BadRequestException({ message: verdict.message, rtp: plannedRtp });
+      }
     }
 
     const withoutPrice = input.items.filter((i) => (priceById.get(i.itemId) ?? 0) <= 0);
@@ -206,6 +216,9 @@ export class AdminService {
           description: input.description ?? null,
           descriptionEn: input.descriptionEn ?? null,
           price: input.price,
+          isFree: input.isFree,
+          freeMinDeposit: input.freeMinDeposit ?? 0,
+          freeMaxOpens: input.freeMaxOpens ?? 1,
           imageUrl: input.imageUrl ?? null,
           isActive: input.isActive,
           sortOrder: input.sortOrder,
@@ -220,6 +233,11 @@ export class AdminService {
           description: input.description === undefined ? undefined : input.description,
           descriptionEn: input.descriptionEn === undefined ? undefined : input.descriptionEn,
           price: input.price,
+          isFree: input.isFree,
+          // Same rule as the shelf and the prose below: a caller that does not
+          // mention the terms is not asking for them to be reset.
+          freeMinDeposit: input.freeMinDeposit,
+          freeMaxOpens: input.freeMaxOpens,
           imageUrl: input.imageUrl ?? null,
           isActive: input.isActive,
           sortOrder: input.sortOrder,
@@ -243,7 +261,7 @@ export class AdminService {
 
       return tx.case.update({
         where: { id: gameCase.id },
-        data: { rtpCached: plannedRtp, rtpCalculatedAt: new Date() },
+        data: { rtpCached: plannedRtp, rtpCalculatedAt: plannedRtp === null ? null : new Date() },
         include: { items: true },
       });
     });
@@ -352,6 +370,9 @@ export class AdminService {
       description: gameCase.description,
       descriptionEn: gameCase.descriptionEn,
       price: gameCase.price,
+      isFree: gameCase.isFree,
+      freeMinDeposit: gameCase.freeMinDeposit,
+      freeMaxOpens: gameCase.freeMaxOpens,
       imageUrl: gameCase.imageUrl,
       isActive: gameCase.isActive,
       sortOrder: gameCase.sortOrder,

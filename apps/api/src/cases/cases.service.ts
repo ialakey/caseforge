@@ -17,6 +17,7 @@ import type {
 import Redis from 'ioredis';
 import {
   type CaseView,
+  type FreeCaseStatus,
   type OpenCaseBatchResult,
   type OpenCaseResult,
   ErrorCode,
@@ -160,6 +161,13 @@ export class CasesService {
     if (!gameCase) throw notFound(ErrorCode.CASE_UNAVAILABLE, 'Case not found');
     if (!gameCase.isActive) throw badRequest(ErrorCode.CASE_UNAVAILABLE, 'Case unavailable');
     if (gameCase.items.length === 0) throw badRequest(ErrorCode.CASE_EMPTY, 'Case is empty');
+
+    // A free case is not rationed by a price, so it has to be rationed here.
+    // Checked before the transaction rather than inside it: both halves are
+    // reads over a 24-hour window, and holding a write transaction open across
+    // them buys nothing — the worst a race can do is let a player through one
+    // extra opening of a case that costs nothing.
+    if (gameCase.isFree) await this.enforceFreeTerms(userId, gameCase, count);
 
     const listPrice = gameCase.price * count;
 
@@ -356,6 +364,111 @@ export class CasesService {
     return rtp;
   }
 
+  /**
+   * How far back the free-case gate looks, for both halves of it.
+   *
+   * A rolling window rather than a calendar day: a daily reset at midnight
+   * turns into a queue of players waiting for it, and a player in another
+   * timezone gets a worse deal than one in ours for no reason anybody can
+   * explain.
+   */
+  private static readonly FREE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+  /** The free case with this slug, or null — including when it is not free. */
+  async findFreeCase(
+    slug: string,
+  ): Promise<{ id: string; slug: string; freeMinDeposit: number; freeMaxOpens: number } | null> {
+    return this.read.case.findFirst({
+      where: { slug, isFree: true, isActive: true },
+      select: { id: true, slug: true, freeMinDeposit: true, freeMaxOpens: true },
+    });
+  }
+
+  /**
+   * One player's standing against one free case's terms.
+   *
+   * Shared by the gate and the endpoint the case page reads, so the number a
+   * player is shown is computed by the same code that will refuse them. Two
+   * implementations of "how much did they deposit" is how a page comes to
+   * promise an opening that the server then declines.
+   */
+  async freeCaseStatus(
+    userId: string,
+    gameCase: { id: string; slug: string; freeMinDeposit: number; freeMaxOpens: number },
+  ): Promise<FreeCaseStatus> {
+    const since = new Date(Date.now() - CasesService.FREE_WINDOW_MS);
+
+    const [deposits, openings] = await Promise.all([
+      this.read.transaction.aggregate({
+        where: { userId, type: 'DEPOSIT', createdAt: { gte: since } },
+        _sum: { amount: true },
+      }),
+      this.read.caseOpening.findMany({
+        where: { userId, caseId: gameCase.id, createdAt: { gte: since } },
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true },
+      }),
+    ]);
+
+    // A deposit is a credit, so the sum is positive; a refund or a correction
+    // could make it negative, and a negative total must not read as progress.
+    const deposited = Math.max(0, deposits._sum.amount ?? 0);
+    const opened = openings.length;
+
+    const depositOk = deposited >= gameCase.freeMinDeposit;
+    const roomLeft = opened < gameCase.freeMaxOpens;
+
+    // When the allowance is spent, the next opening becomes available as the
+    // oldest one in the window ages out — not at some fixed hour.
+    const oldest = openings[0]?.createdAt;
+    const nextOpenAt =
+      !roomLeft && oldest
+        ? new Date(oldest.getTime() + CasesService.FREE_WINDOW_MS).toISOString()
+        : null;
+
+    return {
+      caseSlug: gameCase.slug,
+      terms: { minDeposit: gameCase.freeMinDeposit, maxOpens: gameCase.freeMaxOpens },
+      deposited,
+      opened,
+      canOpen: depositOk && roomLeft,
+      nextOpenAt,
+    };
+  }
+
+  /**
+   * Refuses an opening that the free terms do not allow.
+   *
+   * The deposit shortfall is reported in the error rather than a bare refusal:
+   * the player is being asked to top up, and "you need another 400" is an
+   * instruction where "not allowed" is a dead end.
+   */
+  private async enforceFreeTerms(
+    userId: string,
+    gameCase: { id: string; slug: string; freeMinDeposit: number; freeMaxOpens: number },
+    count: number,
+  ): Promise<void> {
+    const status = await this.freeCaseStatus(userId, gameCase);
+
+    if (status.deposited < gameCase.freeMinDeposit) {
+      throw badRequest(
+        ErrorCode.FREE_CASE_DEPOSIT_REQUIRED,
+        `This case needs ${(gameCase.freeMinDeposit / 100).toFixed(2)} topped up over the ` +
+          `last 24 hours; you have ${(status.deposited / 100).toFixed(2)}`,
+      );
+    }
+
+    // `count` is checked, not just "one more": a batch of ten would otherwise
+    // walk straight past a limit of one.
+    if (status.opened + count > gameCase.freeMaxOpens) {
+      throw badRequest(
+        ErrorCode.FREE_CASE_COOLDOWN,
+        `This case may be opened ${gameCase.freeMaxOpens} time(s) per 24 hours; ` +
+          `you have opened it ${status.opened}`,
+      );
+    }
+  }
+
   private async enforceRateLimit(userId: string, count: number): Promise<void> {
     await this.settings.ensureFresh();
     const allowance = this.settings.get<number>('limits.openPerWindow');
@@ -383,6 +496,11 @@ export class CasesService {
       description: source.description,
       descriptionEn: source.descriptionEn,
       price: source.price,
+      // The terms travel with the case, the viewer's standing against them
+      // does not: this view is cached and shared by every visitor.
+      free: source.isFree
+        ? { minDeposit: source.freeMinDeposit, maxOpens: source.freeMaxOpens }
+        : null,
       imageUrl: source.imageUrl,
       isActive: source.isActive,
       category: source.category
