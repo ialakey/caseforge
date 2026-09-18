@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import {
   type ItemRarity,
+  type PlayerStats,
   type PublicProfileView,
   type PublicUser,
   ErrorCode,
@@ -130,6 +131,59 @@ export class UsersService {
       role: user.role as UserRole,
       balance: user.balance,
       tradeUrl: user.tradeUrl,
+    };
+  }
+
+  /**
+   * A player's own record: what they have done, and the best of it.
+   *
+   * Five independent counts, issued together rather than one endpoint each —
+   * they are read at the same moment by the same panel, and five round trips to
+   * draw one card is five chances for it to render half-finished.
+   *
+   * "Best" is by the price recorded at the moment of the drop, not today's.
+   * That is what the player actually won; re-pricing it later would mean the
+   * number on their proudest card moves without anything having happened.
+   */
+  async getStats(userId: string): Promise<PlayerStats> {
+    const [casesOpened, upgradesWon, upgradesLost, battlesWon, battlesLost, contracts, best] =
+      await Promise.all([
+        this.prisma.caseOpening.count({ where: { userId } }),
+        this.prisma.upgrade.count({ where: { userId, status: 'WON' } }),
+        this.prisma.upgrade.count({ where: { userId, status: 'LOST' } }),
+        // Only finished battles are counted: a seat in a battle still waiting
+        // for players is neither a win nor a loss, and counting it as a loss
+        // would make the lobby look like a losing streak.
+        this.prisma.battlePlayer.count({
+          where: { userId, isWinner: true, battle: { status: 'FINISHED' } },
+        }),
+        this.prisma.battlePlayer.count({
+          where: { userId, isWinner: false, battle: { status: 'FINISHED' } },
+        }),
+        this.prisma.contract.count({ where: { userId } }),
+        this.prisma.caseOpening.findFirst({
+          where: { userId },
+          orderBy: { itemPrice: 'desc' },
+          include: { item: true, case: true },
+        }),
+      ]);
+
+    return {
+      casesOpened,
+      upgrades: { won: upgradesWon, lost: upgradesLost },
+      battles: { won: battlesWon, lost: battlesLost },
+      contracts,
+      bestDrop: best
+        ? {
+            itemName: best.item.name,
+            imageUrl: best.item.imageUrl,
+            rarity: best.item.rarity as ItemRarity,
+            price: best.itemPrice,
+            caseName: best.case.name,
+            caseSlug: best.case.slug,
+            createdAt: best.createdAt.toISOString(),
+          }
+        : null,
     };
   }
 

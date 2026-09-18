@@ -12,7 +12,7 @@ import { useAuth } from '../../lib/store';
 import { useSettings } from '../../lib/settings';
 import { InventoryPanel } from '../../components/InventoryPanel';
 import { Money } from '../../components/Money';
-import { SteamAvatar } from '../../components/SteamAvatar';
+import { ProfileSummary } from '../../components/ProfileSummary';
 
 interface Seeds {
   serverSeedHash: string;
@@ -201,27 +201,9 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      <section className="cf-panel flex flex-wrap items-center gap-4 p-5">
-        <SteamAvatar src={user.avatarUrl} name={user.username} size={72} />
-        <div className="min-w-0">
-          <div className="text-xl font-semibold">{user.username}</div>
-          <div className="text-sm text-ink-faint">SteamID64: {user.steamId64}</div>
-          <a
-            href={`https://steamcommunity.com/profiles/${user.steamId64}`}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="text-sm text-sky-400 hover:underline"
-          >
-            {t('profile.steamProfile')}
-          </a>
-        </div>
-        <div className="ml-auto text-right">
-          <div className="text-xs uppercase tracking-wide text-ink-faint">
-            {t('common.balance')}
-          </div>
-          <Money value={user.balance} className="text-2xl font-semibold text-accent" />
-        </div>
-      </section>
+      {/* Identity, the best thing that ever dropped, and the record —
+          the three questions somebody opens their own profile with. */}
+      <ProfileSummary user={user} />
 
       {error && (
         <p className="rounded-lg bg-negative/15 px-3 py-2 text-sm text-negative">{error}</p>

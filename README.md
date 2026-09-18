@@ -356,9 +356,21 @@ What actually needs filling in before a production run:
 
 ## Profile and balance
 
-After signing in, the header shows the Steam avatar and nickname; the profile
-page adds a card with the SteamID and a link to the Steam profile, a trade URL
-field and the history.
+After signing in, the header shows the Steam avatar and nickname. The profile
+opens on a summary answering the three questions somebody has about their own
+account: who am I and what have I got, what is the best thing that ever came
+out of this, and how much have I actually played.
+
+<p align="center">
+  <img src="docs/screenshots/en/profile-summary.png" alt="The profile summary: identity, best drop and a record" width="900">
+</p>
+
+<p align="center">
+  <em>The best drop is tinted with its own rarity and priced at what it was worth when it dropped, not today — the number on somebody's proudest card should not move without anything having happened. The trade URL appears here as a status rather than a form: the form is further down, and up here the only thing worth knowing at a glance is whether withdrawing will work.</em>
+</p>
+
+Below it: the inventory, the trade URL field, the withdrawal history and the
+seed pair.
 
 The session survives the access token. The token is short-lived on purpose, and
 the browser renews it against the refresh cookie the moment a call comes back

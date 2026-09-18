@@ -31,6 +31,12 @@ export class UsersController {
     return this.users.getProfile(user.id);
   }
 
+  /** Counts and the best drop, for the summary at the top of the profile. */
+  @Get('stats')
+  stats(@CurrentUser() user: AuthenticatedUser) {
+    return this.users.getStats(user.id);
+  }
+
   @Post('trade-url')
   setTradeUrl(
     @CurrentUser() user: AuthenticatedUser,

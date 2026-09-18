@@ -186,6 +186,35 @@ export interface FreeCaseStatus {
 }
 
 /**
+ * A player's own record, for the summary at the top of their profile.
+ *
+ * Counts of what they have done and the single best thing that came out of it.
+ * Deliberately not on `PublicProfileView`: how much somebody plays is a fact
+ * about them, and the public page was scoped to a name, an avatar and their
+ * recent drops on purpose.
+ */
+export interface PlayerStats {
+  /** Cases opened, battles included — every roll that produced an item. */
+  casesOpened: number;
+  /** Upgrades resolved, split by outcome. */
+  upgrades: { won: number; lost: number };
+  /** Battles finished, split by outcome. Unfinished ones count for neither. */
+  battles: { won: number; lost: number };
+  contracts: number;
+  /** The priciest item they have ever unboxed, or null if they never have. */
+  bestDrop: {
+    itemName: string;
+    imageUrl: string | null;
+    rarity: ItemRarity;
+    /** What it was worth at the moment it dropped. */
+    price: number;
+    caseName: string;
+    caseSlug: string;
+    createdAt: string;
+  } | null;
+}
+
+/**
  * A player as a stranger sees them.
  *
  * Deliberately thin. Everything about a player that is nobody else's business
