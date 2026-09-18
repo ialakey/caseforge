@@ -302,12 +302,30 @@ export const SETTINGS = {
     label: 'Navigation: referrals',
   },
 
+  // The key is historical: the feed used to be a block on the landing page and
+  // is now a strip above the header on every page. Renaming the setting would
+  // turn the feed back on for every operator who had switched it off, which is
+  // a worse outcome than a key that no longer reads quite right.
   'appearance.homeDropFeed': {
     group: 'appearance',
     kind: 'boolean',
     schema: z.coerce.boolean(),
     default: true,
-    label: 'Landing page: drop feed',
+    label: 'Drop feed: the strip above the header',
+  },
+  'appearance.dropFeedBestDrop': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Drop feed: pin the best drop of the day',
+  },
+  'appearance.publicProfiles': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Public player profiles',
   },
   'appearance.homeBonusTeaser': {
     group: 'appearance',

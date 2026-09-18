@@ -132,10 +132,24 @@ export interface AppearanceConfig {
     bonus: boolean;
     referral: boolean;
   };
+  /**
+   * The live drop strip that sits above the header on every page.
+   *
+   * Its own group rather than a flag under `home`, because it stopped being a
+   * landing-page block: it is chrome now, like the header itself.
+   */
+  dropFeed: {
+    enabled: boolean;
+    /** Pin the priciest drop of the last day to the left of the strip. */
+    bestDrop: boolean;
+  };
   home: {
-    dropFeed: boolean;
     bonusTeaser: boolean;
     caseFilters: boolean;
+  };
+  /** Whether a player's page is reachable by anybody but themselves. */
+  profiles: {
+    public: boolean;
   };
   footer: {
     note: LocalisedText;
@@ -244,7 +258,9 @@ export const DEFAULT_APPEARANCE: AppearanceConfig = {
     imageUrl: null,
   },
   nav: { battles: true, upgrade: true, contract: true, bonus: true, referral: true },
-  home: { dropFeed: true, bonusTeaser: true, caseFilters: true },
+  dropFeed: { enabled: true, bestDrop: true },
+  home: { bonusTeaser: true, caseFilters: true },
+  profiles: { public: true },
   footer: { note: { ru: '', en: '' }, telegram: '', discord: '', vk: '', steam: '' },
   seo: { description: { ru: '', en: '' } },
 };
@@ -358,10 +374,16 @@ export function buildAppearance(read: (key: string) => unknown): AppearanceConfi
       bonus: flag('navBonus', true),
       referral: flag('navReferral', true),
     },
+    dropFeed: {
+      enabled: flag('homeDropFeed', true),
+      bestDrop: flag('dropFeedBestDrop', true),
+    },
     home: {
-      dropFeed: flag('homeDropFeed', true),
       bonusTeaser: flag('homeBonusTeaser', true),
       caseFilters: flag('homeCaseFilters', true),
+    },
+    profiles: {
+      public: flag('publicProfiles', true),
     },
     footer: {
       note: text('footerNote'),
@@ -383,7 +405,7 @@ export function buildAppearance(read: (key: string) => unknown): AppearanceConfi
  * touching one list rather than a layout.
  */
 export const APPEARANCE_SECTIONS: ReadonlyArray<{
-  key: 'brand' | 'theme' | 'hero' | 'nav' | 'home' | 'footer' | 'seo';
+  key: 'brand' | 'theme' | 'hero' | 'nav' | 'dropFeed' | 'home' | 'profiles' | 'footer' | 'seo';
   fields: readonly string[];
 }> = [
   {
@@ -435,9 +457,14 @@ export const APPEARANCE_SECTIONS: ReadonlyArray<{
     ],
   },
   {
-    key: 'home',
-    fields: ['appearance.homeDropFeed', 'appearance.homeBonusTeaser', 'appearance.homeCaseFilters'],
+    key: 'dropFeed',
+    fields: ['appearance.homeDropFeed', 'appearance.dropFeedBestDrop'],
   },
+  {
+    key: 'home',
+    fields: ['appearance.homeBonusTeaser', 'appearance.homeCaseFilters'],
+  },
+  { key: 'profiles', fields: ['appearance.publicProfiles'] },
   {
     key: 'footer',
     fields: [

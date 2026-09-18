@@ -127,6 +127,13 @@ export const OPEN_COUNT_PRESETS = [1, 2, 3, 5, 10] as const;
 
 export interface LiveDrop {
   openingId: string;
+  /**
+   * Who won it. Carried so the feed can link to their profile without a
+   * lookup per card. Nullable because the feed is replayed from a Redis
+   * backlog that predates this field: an old entry links nowhere rather than
+   * breaking the strip.
+   */
+  userId: string | null;
   username: string;
   avatarUrl: string | null;
   caseName: string;
@@ -136,6 +143,25 @@ export interface LiveDrop {
   rarity: ItemRarity;
   price: number;
   createdAt: string;
+}
+
+/**
+ * A player as a stranger sees them.
+ *
+ * Deliberately thin. Everything about a player that is nobody else's business
+ * — balance, trade URL, transactions, top-ups, inventory — is absent by
+ * construction rather than by filtering, so a field cannot leak into it by
+ * somebody widening a `select` somewhere else.
+ */
+export interface PublicProfileView {
+  id: string;
+  username: string;
+  avatarUrl: string | null;
+  steamId: string | null;
+  /** When they joined; the page shows the month, not the day. */
+  createdAt: string;
+  /** Their recent notable drops — the same ones the live feed would show. */
+  drops: LiveDrop[];
 }
 
 /** WebSocket event names shared by the server and the client. */
