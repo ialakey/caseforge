@@ -174,10 +174,19 @@ assert(
   `without a confirmed Steam price: ${noSteamPrice.map((i) => i.marketHashName).join(', ') || 'none'}`,
 );
 
-console.log('\n14. Every active case is profitable for the site');
+console.log('\n14. Every active case that is sold is profitable for the site');
 const adminCases = await (await fetch(`${API}/api/admin/cases`, { headers: auth })).json();
-for (const c of adminCases.filter((x) => x.isActive)) {
+// Free cases are excluded, and their RTP is `null` rather than a number on
+// purpose: RTP is what comes back per unit staked, and nothing is staked on a
+// case that costs nothing. A price of zero identifies them — the case schema
+// refuses a zero price unless the case is marked free.
+const sold = adminCases.filter((x) => x.isActive && x.price > 0);
+assert(sold.length > 0, `active cases with a price: ${sold.length}`);
+for (const c of sold) {
   assert(c.rtp !== null && c.rtp < 1, `${c.name}: RTP ${((c.rtp ?? 0) * 100).toFixed(1)}% is below 100%`);
+}
+for (const c of adminCases.filter((x) => x.isActive && x.price === 0)) {
+  assert(c.rtp === null, `${c.name} is free and states no RTP (${c.rtp})`);
 }
 
 console.log('\n15. The builder returns a case for editing');

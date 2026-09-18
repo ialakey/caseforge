@@ -172,6 +172,7 @@ pnpm typecheck     # every package
 pnpm test:smoke    # end-to-end run against a live API
 pnpm test:smoke:battles   # battles and referrals, same requirements
 pnpm test:smoke:analytics # the appearance builder and the analytics contour
+pnpm test:smoke:security  # headers, limits, injection, roles
 pnpm test:load     # load generator, also against a live API
 ```
 
@@ -188,6 +189,14 @@ it from the seed pair on record, checks that the items all end up with the
 winner, that a cancelled battle refunds every seat, and that a referral
 commission accrues once, pays out once and takes itself back when the seat it
 was charged on is refunded.
+
+`test:smoke:security` covers the protections that are easy to remove by
+accident: that the security headers are still on every response, that injection
+payloads are looked up as values rather than run as syntax, that a token
+claiming a role it does not have is refused, that the body limit holds
+everywhere except the one route that uploads documents, and that the request
+ceiling fires while health checks stay exempt. Section 13 of
+[ARCHITECTURE.md](docs/ARCHITECTURE.md) says what each of those is defending.
 
 ### If a case turns red on RTP
 
@@ -351,6 +360,8 @@ What actually needs filling in before a production run:
 | `BOT_SECRETS_KEY` | `openssl rand -hex 32`, exactly 64 hex characters. Encrypts both the market API keys and the Steam bot secrets |
 | `BOOTSTRAP_ADMIN_STEAM_ID` | your SteamID64: that account gets the ADMIN role on first sign-in. An account that already exists is promoted with `pnpm grant-admin <SteamID64 \| nickname>` |
 | `ENABLE_STUB_DEPOSITS` | `true`/`false`. The stub top-up. On by default in development, **off in production**, enabled only by an explicit `true` |
+| `TRUST_PROXY` | `true` only when a reverse proxy is terminating connections and setting `X-Forwarded-For` itself. Exposed directly, believing that header lets every caller pick their own address — and with it their own rate-limit bucket |
+| `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_SEC` | the ceiling every request passes under, per address. 300 a minute by default, which one page load comes nowhere near |
 
 ---
 

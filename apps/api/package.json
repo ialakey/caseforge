@@ -29,6 +29,7 @@
     "test:smoke:analytics": "node test/analytics-smoke.mjs",
     "test:smoke:payments": "node test/payments-smoke.mjs",
     "test:smoke:giveaways": "node test/giveaway-smoke.mjs",
+    "test:smoke:security": "node test/security-smoke.mjs",
     "test:load": "node test/load.mjs",
     "seed:cases": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/seed-cases.js",
     "seed:catalogue": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/seed-catalogue.js",
@@ -39,6 +40,8 @@
   "dependencies": {
     "@caseforge/shared": "workspace:*",
     "@fastify/cookie": "^11.0.2",
+    "@fastify/helmet": "^13.1.1",
+    "@fastify/rate-limit": "^11.2.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.1",

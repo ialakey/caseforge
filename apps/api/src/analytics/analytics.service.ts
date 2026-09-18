@@ -70,9 +70,9 @@ export class AnalyticsService {
    */
   async collect(
     input: AnalyticsCollectInput,
-    context: { userId: string | null; userAgent: string | null },
+    context: { userId: string | null; userAgent: string | null; ip: string | null },
   ): Promise<{ accepted: number }> {
-    await this.enforceRateLimit(input.anonId, input.events.length);
+    await this.enforceRateLimit(context.ip ?? input.anonId, input.events.length);
 
     const device = deviceFromUserAgent(context.userAgent);
 
@@ -97,8 +97,17 @@ export class AnalyticsService {
     return { accepted: input.events.length };
   }
 
-  private async enforceRateLimit(anonId: string, count: number): Promise<void> {
-    const key = `ratelimit:analytics:${anonId}`;
+  /**
+   * Counted against the address, falling back to `anonId` only when there is
+   * no address to count against.
+   *
+   * It used to be counted against `anonId` alone, which the browser sends in
+   * the payload and a script can therefore change on every request — a ceiling
+   * the caller chooses is not a ceiling. The address is the one part of the
+   * call that cannot be rewritten from the other side.
+   */
+  private async enforceRateLimit(caller: string, count: number): Promise<void> {
+    const key = `ratelimit:analytics:${caller}`;
     try {
       const used = await this.redis.incrby(key, count);
       if (used === count) await this.redis.expire(key, 60);

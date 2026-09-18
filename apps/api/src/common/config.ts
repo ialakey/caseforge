@@ -33,6 +33,35 @@ const envSchema = z.object({
   CURRENCY: z.string().default('RUB'),
 
   /**
+   * Whether `X-Forwarded-For` may be believed.
+   *
+   * Off by default, and that default is the safe one: with nothing in front of
+   * the API the header is written by whoever is calling, so trusting it hands
+   * every caller the ability to choose their own address — which is to say, to
+   * pick a fresh rate-limit bucket per request and to scatter the referral
+   * abuse checks and the audit log across addresses they invented. Turn it on
+   * only once a reverse proxy is terminating connections and setting the
+   * header itself.
+   */
+  TRUST_PROXY: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+
+  /**
+   * The ceiling every request passes under, per address per window.
+   *
+   * Deliberately loose: a player loading the site pulls the catalogue, the
+   * drop feed, the giveaways and the config within a second or two, and a
+   * limit that fires on an ordinary visit is a limit an operator turns off.
+   * What it stops is the other shape of traffic — one address asking the same
+   * unauthenticated endpoint thousands of times a minute. The per-feature
+   * limits (case opening, analytics) sit underneath and stay much tighter.
+   */
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
+  RATE_LIMIT_WINDOW_SEC: z.coerce.number().int().positive().default(60),
+
+  /**
    * Where identity documents are written.
    *
    * A directory and not a database column: passport scans in Postgres are

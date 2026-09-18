@@ -1149,15 +1149,100 @@ stays correct and a deposit shows up as a deposit in reports.
 
 ## 13. Anti-fraud and security
 
-- rate limits on case opening and withdrawal requests — per user and per IP
-- multi-accounting: correlation by IP, fingerprint, trade URL and payment instrument
+### What the code does today
+
+**Injection.** Every query goes through Prisma. The three dozen raw ones are
+tagged templates, which Prisma sends as a parameterised statement, so a value
+can never become syntax. The unsafe variants (`$queryRawUnsafe`,
+`$executeRawUnsafe`, `Prisma.raw`) appear nowhere in the repository, and that is
+worth keeping true: they are the only way to get a string concatenated into SQL
+here.
+
+**Input.** Every body is parsed by a zod schema before a handler sees it, every
+`:id` goes through `ParseUUIDPipe`, and pagination is capped at 100 rows a page.
+Amounts are read from the database, never from the request: the client sends an
+id and a count, and what something costs is looked up.
+
+**Volume.** A ceiling over the whole API, counted per address in Redis so it
+means the same thing on every instance: `RATE_LIMIT_MAX` requests per
+`RATE_LIMIT_WINDOW_SEC` seconds, 300 a minute by default. Health checks are
+exempt, and a Redis outage lets requests through rather than refusing them — a
+guard rail that fails closed is an outage. Underneath it sit the tighter
+per-feature limits: case opening per account (`limits.openPerWindow` in the back
+office) and analytics per address.
+
+**Body size.** One megabyte everywhere, which is already generous for an API
+whose largest ordinary payload is a settings object. The single exception is
+`POST /api/kyc`, raised to twelve, because identity documents arrive as base64
+and a passport photographed on a phone is several megabytes before encoding adds
+a third. Raising it globally would let any caller make the server buffer twelve
+megabytes at a time.
+
+**Headers.** Helmet on every response: `default-src 'none'` and
+`frame-ancestors 'none'` (the API renders no pages and is never meant to be
+framed), `nosniff`, HSTS, `no-referrer`. CORS is an explicit allowlist from
+`CORS_ORIGINS`, not a reflection of whatever Origin arrived.
+
+**Addresses.** `TRUST_PROXY` is off by default. Exposed directly, the API is the
+only thing writing `X-Forwarded-For`, so believing the header would let any
+caller choose their own address — a fresh rate-limit bucket per request, and
+audit entries under addresses they invented. Turn it on once a reverse proxy is
+terminating connections and setting the header itself.
+
+**Sign-in.** Steam OpenID and nothing else: there is no password anywhere in the
+system, so there is no password to guess. The callback is not trusted on sight —
+it is posted back to `steamcommunity.com` with `check_authentication` and only a
+confirmed `is_valid:true` counts, after which the claimed identifier has to match
+`https://steamcommunity.com/openid/id/<17 digits>` exactly.
+
+**Sessions.** The access token is a 15-minute HS256 bearer token; the refresh
+token is an httpOnly, `SameSite=Lax`, `Secure`-in-production cookie. Every other
+endpoint reads the bearer header, which a cross-site page cannot set, and the one
+cookie-bearing route is a POST, which `SameSite=Lax` does not send cross-site —
+so there is no CSRF surface to protect. A ban is read from the database on every
+action that moves value rather than from the token, so it takes effect at once;
+a *role* travels in the token, so a demotion takes up to fifteen minutes.
+
+**Ownership.** Every route that takes an id resolves it against the caller —
+`findFirst({ where: { id, userId } })` — or sits behind the roles guard. Identity
+documents are the strictest case: served through the API rather than off a static
+path, behind `ADMIN`/`SUPPORT`, with the path on disk resolved from the row (so
+there is no path in the request to traverse with), written `0600`, and answered
+`Cache-Control: no-store`.
+
+**Money in.** The payment webhook verifies an HMAC over the raw body before the
+JSON is parsed, and crediting is a conditional update, so a replayed callback
+credits nothing.
+
+**Markup.** No `dangerouslySetInnerHTML`, no `innerHTML`, no `eval` — every
+player-supplied string (a nickname, a promo code) goes through React, which
+escapes it.
+
+**Secrets.** Both JWT secrets are required and must be at least 32 characters;
+neither has a default. `.env` is ignored by git and only `.env.example` is
+tracked.
+
+### What the deployment still has to provide
+
+The limiter counts requests inside the process, which is the right place to stop
+a script and the wrong place to stop a flood: traffic large enough to saturate
+the link has already arrived by the time Node sees it. A CDN or a proxy in front
+is what absorbs that — and once there is one, set `TRUST_PROXY=true` so the
+limiter counts real addresses instead of the proxy's.
+
+Two things are deliberately not capped. WebSocket connections: the gateways have
+no client-to-server handlers at all, so a socket can only receive, but it still
+costs memory. And the catalogue response, which is a couple of megabytes of JSON;
+it is cached in Redis, so the cost is bandwidth rather than database work.
+
+### Still to build
+
+- multi-accounting: correlation by address, fingerprint, trade URL and payment instrument
 - withdrawal limits: daily, plus a rule for the first withdrawal after a first deposit
-- chargeback risk: hold withdrawals until a deposit has "settled"
-- checking Steam account age and profile level — filters out throwaway accounts
-- referral self-dealing: an invite binds only to an account with no history, a player
-  cannot use their own code, and a sign-up from the inviter's address is flagged
-- every incoming amount is validated server-side; the client never sends a price, only an id
-- secrets only in the environment or a secret manager; the repository holds `.env.example`
+- chargeback risk: holding withdrawals until a deposit has settled
+- Steam account age and profile level, which filter out throwaway accounts
+- referral self-dealing beyond what is already checked (a code binds only to an
+  account with no history, and a sign-up from the inviter's address is flagged)
 
 Separately: **the legal side.** Buying a case with real money is regulated as
 gambling in most jurisdictions, and the requirements (licence, KYC, age

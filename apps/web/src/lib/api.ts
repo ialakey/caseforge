@@ -132,10 +132,13 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     // for codes a build does not know yet.
     const payload = (await response.json().catch(() => null)) as ApiErrorBody | null;
     const message = payload?.message ?? `Request failed with ${response.status}`;
+    // A 429 from the global limiter is refused before the request reaches the
+    // application, so it carries no code of its own — the status is the code.
+    const code = payload?.code ?? (response.status === 429 ? 'RATE_LIMITED' : undefined);
     throw new ApiError(
       Array.isArray(message) ? message.join(', ') : message,
       response.status,
-      payload?.code,
+      code,
     );
   }
 

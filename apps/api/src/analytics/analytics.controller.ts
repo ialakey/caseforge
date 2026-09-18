@@ -30,6 +30,9 @@ export class AnalyticsController {
     return this.analytics.collect(body, {
       userId: request.user?.id ?? null,
       userAgent: userAgent ?? null,
+      // The address, so the per-caller ceiling counts something the caller
+      // does not get to choose. `anonId` arrives in the payload.
+      ip: request.ip ?? null,
     });
   }
 }
