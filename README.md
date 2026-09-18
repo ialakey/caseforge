@@ -1203,7 +1203,7 @@ and use by charities, schools, public research bodies and governments.
 
 **Commercial use needs written permission** from the author. Running this, or
 anything derived from it, as a business or for revenue is not covered by the
-licence on its own — ask first: <prosoulk2017@gmail.com>.
+licence on its own — ask first: <alakov.ilia@gmail.com>.
 
 **The attribution is a licence term, not a courtesy.** Under the licence's
 Notices section, anyone passing on any part of this software must also pass on
