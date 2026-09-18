@@ -1,5 +1,16 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
-import type { FastifyRequest } from 'fastify';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   UserRole,
@@ -16,6 +27,7 @@ import {
   type UpsertPromoCodeInput,
 } from '@caseforge/shared';
 import { AdminService } from './admin.service';
+import { ReportsService } from './reports.service';
 import { CasesService } from '../cases/cases.service';
 import { SteamMarketService } from '../steam/steam-market.service';
 import { ItemSyncService } from '../steam/item-sync.service';
@@ -71,6 +83,7 @@ export class AdminController {
     private readonly itemSync: ItemSyncService,
     private readonly settings: SettingsService,
     private readonly promo: PromoService,
+    private readonly reports: ReportsService,
   ) {}
 
   @Get('dashboard')
@@ -138,6 +151,61 @@ export class AdminController {
   withdrawals(@Query() query: Record<string, string>) {
     const { page, perPage } = paginationSchema.parse(query);
     return this.admin.listWithdrawals(query.status, page, perPage);
+  }
+
+  /**
+   * A money summary for a period, by channel.
+   *
+   * The dashboard answers "how are we doing"; this and the exports below
+   * answer "show me the rows" — which is what reconciling against a statement
+   * or answering a chargeback actually needs.
+   */
+  @Get('reports/summary')
+  @Roles(UserRole.ANALYST)
+  reportSummary(@Query() query: Record<string, string>) {
+    return this.reports.summary(periodSchema.parse(query));
+  }
+
+  /**
+   * The exports.
+   *
+   * One route with the report named in the path rather than four: they differ
+   * only in which query runs, and four near-identical handlers is four places
+   * to forget the content type.
+   */
+  @Get('reports/:report.csv')
+  @Roles(UserRole.ANALYST)
+  async reportCsv(
+    @Param('report') report: string,
+    @Query() query: Record<string, string>,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    const period = periodSchema.parse(query);
+
+    const builders: Record<string, () => Promise<string>> = {
+      transactions: () => this.reports.transactionsCsv(period),
+      payments: () => this.reports.paymentsCsv(period),
+      withdrawals: () => this.reports.withdrawalsCsv(period),
+      'item-deposits': () => this.reports.itemDepositsCsv(period),
+    };
+
+    const build = builders[report];
+    if (!build) throw new NotFoundException(`No report called "${report}"`);
+
+    const csv = await build();
+    await reply
+      .header('Content-Type', 'text/csv; charset=utf-8')
+      .header('Content-Disposition', `attachment; filename="${report}.csv"`)
+      // A financial export is per-operator and per-moment; a cached copy in a
+      // proxy is somebody else's numbers.
+      .header('Cache-Control', 'no-store, private')
+      .send(csv);
+  }
+
+  @Get('payments')
+  payments(@Query() query: Record<string, string>) {
+    const { page, perPage } = paginationSchema.parse(query);
+    return this.admin.listPayments(query.status, page, perPage);
   }
 
   /** Deposits of skins: what the site was given, and whether it paid for it. */

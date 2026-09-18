@@ -540,6 +540,23 @@ export class AdminService {
     return { total, page, perPage, items };
   }
 
+  /** Money top-ups, for an operator: what was attempted and what landed. */
+  async listPayments(status: string | undefined, page: number, perPage: number) {
+    const where = status ? { status: status as Prisma.EnumPaymentStatusFilter['equals'] } : {};
+
+    const [total, items] = await Promise.all([
+      this.read.payment.count({ where }),
+      this.read.payment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * perPage,
+        take: perPage,
+        include: { user: { select: { username: true, steamId64: true } } },
+      }),
+    ]);
+    return { total, page, perPage, items };
+  }
+
   /**
    * Deposits of skins, for an operator.
    *

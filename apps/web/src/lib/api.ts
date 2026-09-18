@@ -143,3 +143,28 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const loginUrl = `${API_URL}/api/auth/steam`;
+
+/**
+ * Fetches a file and saves it, with the session attached.
+ *
+ * A plain `<a download>` cannot carry the access token, and a financial export
+ * is not something to put behind a URL that works without one. So the file is
+ * fetched like any other call, turned into a blob and handed to a synthetic
+ * link — which is the only way a browser offers to save bytes it already has.
+ */
+export async function downloadFile(path: string, filename: string): Promise<void> {
+  const response = await fetch(`${API_URL}${path}`, buildInit({}, getToken()));
+  if (!response.ok) {
+    throw new ApiError(`Download failed with ${response.status}`, response.status);
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  // Revoked once the click has been dispatched; leaving it costs the page the
+  // whole file in memory until a reload.
+  URL.revokeObjectURL(url);
+}

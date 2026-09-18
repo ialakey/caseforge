@@ -19,6 +19,8 @@ const TABS: Array<{ href: string; label: TranslationKey }> = [
   { href: '/admin/appearance', label: 'admin.nav.appearance' },
   { href: '/admin/cases', label: 'admin.nav.cases' },
   { href: '/admin/promo', label: 'admin.nav.promo' },
+  { href: '/admin/finance', label: 'admin.nav.finance' },
+  { href: '/admin/kyc', label: 'admin.nav.kyc' },
   { href: '/admin/market', label: 'admin.nav.market' },
   { href: '/admin/bots', label: 'admin.nav.bots' },
   { href: '/admin/settings', label: 'admin.nav.settings' },
