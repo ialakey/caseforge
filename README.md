@@ -747,6 +747,14 @@ valuation is frozen when the request is made.** Somebody quoted 4 200 is
 credited 4 200 even if the market moves while the offer waits in Steam — the
 number they agreed to is the number a dispute would be about.
 
+<p align="center">
+  <img src="docs/screenshots/en/deposit-items.png" alt="Picking skins out of a Steam inventory to deposit" width="900">
+</p>
+
+<p align="center">
+  <em>The whole inventory, priced at the payout rate. What cannot be deposited stays on screen with the reason — a trade hold, or a skin the catalogue has no price for — because a gap where somebody's knife should be explains nothing.</em>
+</p>
+
 Prices are always the site's own. The browser sends asset ids and nothing else,
 because a client that could name its own price could name any price. A skin the
 catalogue has never carried has no price here and is refused rather than guessed
@@ -805,6 +813,14 @@ carries a reason and the player is shown it; "rejected" with nothing else is an
 invitation to submit the same thing again. An approved application cannot be
 overwritten, or the check would be decorative.
 
+<p align="center">
+  <img src="docs/screenshots/en/admin-kyc.png" alt="The identity review queue with one pending application" width="900">
+</p>
+
+<p align="center">
+  <em>The review queue. Documents open through an authenticated endpoint rather than being embedded — a passport scan inlined into a page is a passport scan in the browser cache of whoever left the tab open. The application shown is synthetic.</em>
+</p>
+
 The gate is **cumulative**: it counts what a player has withdrawn over their
 lifetime rather than the size of the request in front of them, because splitting
 one large withdrawal into ten small ones is the obvious way around a per-request
@@ -828,6 +844,14 @@ rest for that directory, and a retention schedule.
 answers "how are we doing"; these answer "show me the rows" — reconciling
 against a bank statement, answering a chargeback, handing an accountant
 something.
+
+<p align="center">
+  <img src="docs/screenshots/en/admin-finance.png" alt="The finance panel listing skin deposits" width="900">
+</p>
+
+<p align="center">
+  <em>Both channels on one page, because an operator's question spans both — did today's money arrive — and on separate tabs, because the answer looks different. A deposit stuck awaiting credit means a bot holds somebody's skins and nobody has paid for them, so it gets a counter of its own.</em>
+</p>
 
 Every figure comes from the transaction ledger rather than from the tables the
 money passed through: a payment row says what a provider was asked for, the
