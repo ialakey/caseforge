@@ -47,6 +47,9 @@ interface LoadedCase {
   description: string | null;
   descriptionEn: string | null;
   price: number;
+  isFree: boolean;
+  freeMinDeposit: number;
+  freeMaxOpens: number;
   imageUrl: string | null;
   isActive: boolean;
   sortOrder: number;
@@ -83,6 +86,9 @@ export default function CaseBuilderPage() {
   const [description, setDescription] = useState('');
   const [descriptionEn, setDescriptionEn] = useState('');
   const [categorySlug, setCategorySlug] = useState('');
+  const [isFree, setIsFree] = useState(false);
+  const [freeMinDepositMajor, setFreeMinDepositMajor] = useState('0');
+  const [freeMaxOpens, setFreeMaxOpens] = useState(1);
   const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [items, setItems] = useState<BuilderItem[]>([]);
 
@@ -111,6 +117,9 @@ export default function CaseBuilderPage() {
         setDescription(data.description ?? '');
         setDescriptionEn(data.descriptionEn ?? '');
         setCategorySlug(data.categorySlug ?? '');
+        setIsFree(data.isFree);
+        setFreeMinDepositMajor((data.freeMinDeposit / 100).toFixed(2));
+        setFreeMaxOpens(data.freeMaxOpens);
         setItems(data.items);
         setLoaded(true);
       })
@@ -127,6 +136,8 @@ export default function CaseBuilderPage() {
   }, [user]);
 
   const priceMinor = Math.round(Number.parseFloat(priceMajor.replace(',', '.')) * 100) || 0;
+  const freeMinDepositMinor =
+    Math.round(Number.parseFloat(freeMinDepositMajor.replace(',', '.')) * 100) || 0;
 
   // The same computation the server runs on save: the operator sees the
   // verdict up front, but the server still decides.
@@ -291,7 +302,13 @@ export default function CaseBuilderPage() {
           categorySlug: categorySlug === '' ? null : categorySlug,
           description: description.trim() === '' ? null : description.trim(),
           descriptionEn: descriptionEn.trim() === '' ? null : descriptionEn.trim(),
-          price: priceMinor,
+          // A free case is priced at zero by definition; the server refuses
+          // the pair if they disagree, so sending the typed price here would
+          // only produce a validation error the operator cannot act on.
+          price: isFree ? 0 : priceMinor,
+          isFree,
+          freeMinDeposit: freeMinDepositMinor,
+          freeMaxOpens,
           imageUrl: imageUrl.trim() === '' ? null : imageUrl.trim(),
           isActive,
           sortOrder,
@@ -316,9 +333,11 @@ export default function CaseBuilderPage() {
   const canSave =
     slug.length >= 2 &&
     name.length >= 2 &&
-    priceMinor > 0 &&
+    // A free case is priced at zero, so the usual "must cost something" rule
+    // is the one thing that would stop it being saved.
+    (isFree || priceMinor > 0) &&
     coverageOk &&
-    verdict.allowed &&
+    (isFree || verdict.allowed) &&
     itemsWithoutPrice.length === 0;
 
   return (
@@ -405,6 +424,44 @@ export default function CaseBuilderPage() {
             />
           </label>
         </div>
+      </section>
+
+      <section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+        <h2 className="font-medium">{t('admin.case.freeTitle')}</h2>
+        <p className="text-sm text-neutral-500">{t('admin.case.freeHint')}</p>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={isFree} onChange={(e) => setIsFree(e.target.checked)} />
+          <span>{t('admin.case.isFree')}</span>
+        </label>
+
+        {/* The terms only exist for a free case, so they only appear for one:
+            two greyed-out boxes on every paid case in the catalogue are two
+            more things an operator has to learn to ignore. */}
+        {isFree && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm">
+              <span className="mb-1 block text-neutral-500">{t('admin.case.freeMinDeposit')}</span>
+              <input
+                value={freeMinDepositMajor}
+                onChange={(e) => setFreeMinDepositMajor(e.target.value)}
+                inputMode="decimal"
+                className="w-full rounded bg-neutral-800 px-2 py-1.5"
+                placeholder="1000.00"
+              />
+            </label>
+            <label className="text-sm">
+              <span className="mb-1 block text-neutral-500">{t('admin.case.freeMaxOpens')}</span>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                value={freeMaxOpens}
+                onChange={(e) => setFreeMaxOpens(Math.max(1, Number(e.target.value) || 1))}
+                className="w-full rounded bg-neutral-800 px-2 py-1.5"
+              />
+            </label>
+          </div>
+        )}
       </section>
 
       <section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
@@ -512,26 +569,32 @@ export default function CaseBuilderPage() {
         </div>
 
         <div className="flex flex-wrap gap-6 text-sm">
-          <div>
-            <span className="text-neutral-500">{t('admin.case.currentRtp')}</span>
-            <span
-              className={
-                !verdict.allowed
-                  ? 'font-medium text-red-400'
-                  : verdict.healthy
-                    ? 'font-medium text-emerald-400'
-                    : 'font-medium text-amber-400'
-              }
-            >
-              {(rtp * 100).toFixed(2)}%
-            </span>
-          </div>
-          <div>
-            <span className="text-neutral-500">{t('admin.case.margin')}</span>
-            <span className={rtp < 1 ? 'text-emerald-400' : 'text-red-400'}>
-              {((1 - rtp) * 100).toFixed(2)}%
-            </span>
-          </div>
+          {/* A free case has no RTP: nothing is staked, so there is no ratio
+              to report. Showing 0% would read as a case that pays nothing. */}
+          {!isFree && (
+            <>
+              <div>
+                <span className="text-neutral-500">{t('admin.case.currentRtp')}</span>
+                <span
+                  className={
+                    !verdict.allowed
+                      ? 'font-medium text-red-400'
+                      : verdict.healthy
+                        ? 'font-medium text-emerald-400'
+                        : 'font-medium text-amber-400'
+                  }
+                >
+                  {(rtp * 100).toFixed(2)}%
+                </span>
+              </div>
+              <div>
+                <span className="text-neutral-500">{t('admin.case.margin')}</span>
+                <span className={rtp < 1 ? 'text-emerald-400' : 'text-red-400'}>
+                  {((1 - rtp) * 100).toFixed(2)}%
+                </span>
+              </div>
+            </>
+          )}
           <div>
             <span className="text-neutral-500">{t('admin.case.coverage')}</span>
             <span className={coverageOk ? 'text-emerald-400' : 'text-red-400'}>
@@ -540,7 +603,7 @@ export default function CaseBuilderPage() {
           </div>
         </div>
 
-        {items.length > 0 && (
+        {items.length > 0 && !isFree && (
           <p className="text-sm text-neutral-400">
             {translateDomainMessage(locale, verdict.code, verdict.params, verdict.message)}
           </p>

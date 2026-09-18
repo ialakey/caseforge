@@ -6,6 +6,7 @@ import {
   localizedName,
   translateError,
   type CaseView,
+  type FreeCaseStatus,
   type OpenCaseBatchResult,
   type TranslationKey,
 } from '@caseforge/shared';
@@ -13,6 +14,7 @@ import { api, ApiError, loginUrl } from '../lib/api';
 import { useAuth } from '../lib/store';
 import { useSettings } from '../lib/settings';
 import { DropResults } from './DropResults';
+import { FreeCaseTerms } from './FreeCaseTerms';
 import { ItemImage } from './ItemImage';
 import { Money, useMoneyFormatter } from './Money';
 import { RarityBadge, rarityColor } from './RarityBadge';
@@ -46,6 +48,19 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
   const totalPrice = gameCase.price * count;
   const notEnough = user !== null && user.balance < totalPrice;
   const busy = requesting || spinning;
+
+  /**
+   * A free case's terms block the button as surely as an empty balance does.
+   *
+   * `undefined` while the status is in flight — the button stays enabled, the
+   * server checks again anyway, and a button that greys out for half a second
+   * on every page load is worse than one click that comes back with a reason.
+   */
+  const [freeStatus, setFreeStatus] = useState<FreeCaseStatus | null | undefined>(undefined);
+  const freeBlocked =
+    gameCase.free !== null &&
+    freeStatus != null &&
+    (!freeStatus.canOpen || freeStatus.opened + count > freeStatus.terms.maxOpens);
 
   async function open(): Promise<void> {
     setRequesting(true);
@@ -154,6 +169,16 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
         )}
 
         <div className="mt-6 flex flex-col items-center gap-3">
+          {gameCase.free && (
+            <div className="w-full max-w-lg">
+              <FreeCaseTerms
+                slug={gameCase.slug}
+                terms={gameCase.free}
+                onStatus={setFreeStatus}
+              />
+            </div>
+          )}
+
           {/* Quantity picker: up to ten cases at once */}
           <div className="flex gap-1.5">
             {OPEN_COUNT_PRESETS.map((preset) => (
@@ -175,7 +200,7 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
           {user ? (
             <button
               onClick={open}
-              disabled={busy || notEnough}
+              disabled={busy || notEnough || freeBlocked}
               className="cf-btn-primary px-10 py-3"
             >
               {spinning

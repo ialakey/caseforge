@@ -59,7 +59,13 @@ export function CaseCard({ item }: { item: CaseView }) {
           {title}
         </div>
         <div className="mt-1.5 flex items-center justify-between text-sm">
-          <Money value={item.price} className="font-semibold text-accent" />
+          {/* A free case shows a word, not "0,00 ₽": the price is the first
+              thing scanned on a card, and a zero there reads as a bug. */}
+          {item.free ? (
+            <span className="font-semibold text-positive">{t('case.free.badge')}</span>
+          ) : (
+            <Money value={item.price} className="font-semibold text-accent" />
+          )}
           <span className="text-xs text-ink-faint">
             {item.items.length} {t('common.itemsCount')}
           </span>
