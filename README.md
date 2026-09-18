@@ -562,7 +562,7 @@ rather than a deploy.
 </p>
 
 <p align="center">
-  <em>Each field is rendered from the registry, key and all — so a setting added in the shared package appears here with no change to the panel. The battle and referral groups arrived exactly that way.</em>
+  <em>Each field is rendered from the registry, key and all — so a setting added in the shared package appears here with no change to the panel. The battles, referrals and appearance groups all arrived exactly that way; the last of them has a builder of its own, and the link says so.</em>
 </p>
 
 The form is generated from a registry declared once in
