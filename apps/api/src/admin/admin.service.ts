@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma, PrismaClient } from '@prisma/client';
 import {
+  type UpsertCaseCategoryInput,
   type UpsertCaseInput,
   ErrorCode,
   calculateRtp,
@@ -176,6 +177,25 @@ export class AdminService {
       include: { items: true },
     });
 
+    // The shelf arrives as a slug, which is what a seed file and an operator
+    // both hold. An unknown slug is refused rather than silently dropping the
+    // case into the ungrouped shelf: a typo in a re-import would otherwise
+    // quietly empty a whole category.
+    let categoryId: string | null = null;
+    if (input.categorySlug) {
+      const category = await this.prisma.caseCategory.findUnique({
+        where: { slug: input.categorySlug },
+        select: { id: true },
+      });
+      if (!category) {
+        throw badRequest(
+          ErrorCode.VALIDATION_FAILED,
+          `No case category with the slug "${input.categorySlug}"`,
+        );
+      }
+      categoryId = category.id;
+    }
+
     const saved = await this.prisma.$transaction(async (tx) => {
       const gameCase = await tx.case.upsert({
         where: { slug: input.slug },
@@ -183,18 +203,29 @@ export class AdminService {
           slug: input.slug,
           name: input.name,
           nameEn: input.nameEn ?? null,
+          description: input.description ?? null,
+          descriptionEn: input.descriptionEn ?? null,
           price: input.price,
           imageUrl: input.imageUrl ?? null,
           isActive: input.isActive,
           sortOrder: input.sortOrder,
+          categoryId,
         },
         update: {
           name: input.name,
           nameEn: input.nameEn ?? null,
+          // Undefined leaves the prose alone, for the same reason the shelf is
+          // left alone below: the case builder does not send a description,
+          // and saving a loot table must not silently erase one.
+          description: input.description === undefined ? undefined : input.description,
+          descriptionEn: input.descriptionEn === undefined ? undefined : input.descriptionEn,
           price: input.price,
           imageUrl: input.imageUrl ?? null,
           isActive: input.isActive,
           sortOrder: input.sortOrder,
+          // Undefined rather than null when the caller said nothing: an edit
+          // that does not mention the shelf must not take the case off it.
+          categoryId: input.categorySlug === undefined ? undefined : categoryId,
         },
       });
 
@@ -222,6 +253,55 @@ export class AdminService {
     await this.cases.invalidateCatalogue();
 
     await this.audit(actorId, 'case.upsert', 'Case', saved.id, before, saved, ip);
+    return saved;
+  }
+
+  /**
+   * The shelves, with how many cases sit on each.
+   *
+   * Includes the disabled ones: an operator who hid a shelf for a holiday has
+   * to be able to find it again.
+   */
+  async listCategories() {
+    const rows = await this.read.caseCategory.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      include: { _count: { select: { cases: true } } },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      nameEn: row.nameEn,
+      sortOrder: row.sortOrder,
+      isActive: row.isActive,
+      cases: row._count.cases,
+    }));
+  }
+
+  /**
+   * Creates a shelf or renames one.
+   *
+   * Never deleted from here. A category with cases on it cannot be removed
+   * without deciding what happens to them, and "silently ungrouped" is not a
+   * decision an operator should make by pressing one button.
+   */
+  async upsertCategory(actorId: string, input: UpsertCaseCategoryInput, ip: string | null) {
+    const before = await this.prisma.caseCategory.findUnique({ where: { slug: input.slug } });
+    const data = {
+      name: input.name,
+      nameEn: input.nameEn ?? null,
+      sortOrder: input.sortOrder,
+      isActive: input.isActive,
+    };
+
+    const saved = await this.prisma.caseCategory.upsert({
+      where: { slug: input.slug },
+      create: { slug: input.slug, ...data },
+      update: data,
+    });
+
+    await this.cases.invalidateCatalogue();
+    await this.audit(actorId, 'category.upsert', 'CaseCategory', saved.id, before, saved, ip);
     return saved;
   }
 
@@ -254,15 +334,23 @@ export class AdminService {
   async getCase(slug: string) {
     const gameCase = await this.read.case.findUnique({
       where: { slug },
-      include: { items: { include: { item: true }, orderBy: { rangeFrom: 'asc' } } },
+      include: {
+        items: { include: { item: true }, orderBy: { rangeFrom: 'asc' } },
+        category: true,
+      },
     });
     if (!gameCase) throw new NotFoundException('Case not found');
 
     return {
       id: gameCase.id,
       slug: gameCase.slug,
+      // The slug, not the id: it is what the upsert takes back, so the builder
+      // can round-trip the shelf without translating between the two.
+      categorySlug: gameCase.category?.slug ?? null,
       name: gameCase.name,
       nameEn: gameCase.nameEn,
+      description: gameCase.description,
+      descriptionEn: gameCase.descriptionEn,
       price: gameCase.price,
       imageUrl: gameCase.imageUrl,
       isActive: gameCase.isActive,

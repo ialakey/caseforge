@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import type { Item } from '@prisma/client';
-import { judgeRtp } from '@caseforge/shared';
+import { judgeRtp, type SteamMarketItem } from '@caseforge/shared';
 import { PrismaService } from '../common/prisma.service';
 import { CacheNamespace, CacheService } from '../common/cache.service';
+import { FxService } from '../common/fx.service';
 import { SteamMarketService } from './steam-market.service';
 
 /**
@@ -28,6 +29,7 @@ export class ItemSyncService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cache: CacheService,
+    private readonly fx: FxService,
     private readonly market: SteamMarketService,
   ) {}
 
@@ -92,6 +94,79 @@ export class ItemSyncService {
           reason: err instanceof Error ? err.message : String(err),
         });
       }
+    }
+
+    return result;
+  }
+
+  /**
+   * Imports items straight from a search response.
+   *
+   * The difference from `importItems` is the price. That one asks Steam for a
+   * settlement-currency price per item, which is a request each and therefore
+   * three and a half seconds each; this one takes the reference price the
+   * search already returned and converts it at the live rate. One search
+   * answers for a hundred items, so seeding a catalogue of thousands becomes
+   * minutes instead of hours.
+   *
+   * The trade is precision: a converted reference price is Steam's lowest
+   * listing rather than the median the price endpoint reports, so it runs a
+   * little low. That is acceptable for seeding — the hourly synchronisation
+   * replaces every one of them with a proper median, and an item priced a
+   * little low is an item a case is a little generous about, never one that
+   * quietly loses money.
+   *
+   * Items without a reference price are refused rather than stored at zero:
+   * a case built on an invented price is a case with an invented RTP.
+   */
+  async importFromMarket(items: readonly SteamMarketItem[]): Promise<ImportResult> {
+    const result: ImportResult = { imported: 0, updated: 0, failed: [], items: [] };
+    // The rate is optional in the type because a rate table can be missing a
+    // currency; without it there is nothing to convert from and the import
+    // refuses every item rather than inventing prices.
+    const usdRate = this.fx.getRates().USD ?? 0;
+
+    for (const item of items) {
+      const usdCents = item.referencePriceUsd ?? 0;
+      if (usdCents <= 0 || !Number.isFinite(usdRate) || usdRate <= 0) {
+        result.failed.push({ marketHashName: item.marketHashName, reason: 'No reference price' });
+        continue;
+      }
+
+      // referencePriceUsd is in cents and the rate is base-currency units per
+      // dollar, so the product is already in base minor units.
+      const price = Math.round(usdCents * usdRate);
+
+      const existing = await this.prisma.item.findUnique({
+        where: { marketHashName: item.marketHashName },
+      });
+
+      const saved = await this.prisma.item.upsert({
+        where: { marketHashName: item.marketHashName },
+        create: {
+          marketHashName: item.marketHashName,
+          name: item.name,
+          imageUrl: item.imageUrl,
+          rarity: item.rarity,
+          weaponType: item.weaponType,
+          exterior: item.exterior,
+          marketPrice: price,
+          priceUpdatedAt: new Date(),
+        },
+        update: {
+          imageUrl: item.imageUrl,
+          rarity: item.rarity,
+          weaponType: item.weaponType,
+          exterior: item.exterior,
+          // An item that already has a price keeps it: this path is a seed,
+          // and the scheduled synchronisation knows better than a search does.
+          ...(existing?.priceUpdatedAt ? {} : { marketPrice: price, priceUpdatedAt: new Date() }),
+        },
+      });
+
+      if (existing) result.updated += 1;
+      else result.imported += 1;
+      result.items.push(saved);
     }
 
     return result;

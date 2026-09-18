@@ -6,7 +6,14 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import type { Case, CaseItem, Item, Prisma, PrismaClient } from '@prisma/client';
+import type {
+  Case,
+  CaseCategory,
+  CaseItem,
+  Item,
+  Prisma,
+  PrismaClient,
+} from '@prisma/client';
 import Redis from 'ioredis';
 import {
   type CaseView,
@@ -50,7 +57,10 @@ import { SettingsService } from '../common/settings.service';
  */
 const CATALOGUE_TTL_SEC = 60;
 
-type CaseWithItems = Case & { items: (CaseItem & { item: Item })[] };
+type CaseWithItems = Case & {
+  items: (CaseItem & { item: Item })[];
+  category?: CaseCategory | null;
+};
 
 @Injectable()
 export class CasesService {
@@ -79,7 +89,10 @@ export class CasesService {
       const cases = await this.read.case.findMany({
         where: { isActive: true },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-        include: { items: { include: { item: true }, orderBy: { rangeFrom: 'asc' } } },
+        include: {
+          items: { include: { item: true }, orderBy: { rangeFrom: 'asc' } },
+          category: true,
+        },
       });
       return cases.map((c) => this.toCaseView(c));
     });
@@ -93,7 +106,10 @@ export class CasesService {
       async () => {
         const found = await this.read.case.findUnique({
           where: { slug },
-          include: { items: { include: { item: true }, orderBy: { rangeFrom: 'asc' } } },
+          include: {
+            items: { include: { item: true }, orderBy: { rangeFrom: 'asc' } },
+            category: true,
+          },
         });
         return found ? this.toCaseView(found) : null;
       },
@@ -364,9 +380,20 @@ export class CasesService {
       slug: source.slug,
       name: source.name,
       nameEn: source.nameEn,
+      description: source.description,
+      descriptionEn: source.descriptionEn,
       price: source.price,
       imageUrl: source.imageUrl,
       isActive: source.isActive,
+      category: source.category
+        ? {
+            id: source.category.id,
+            slug: source.category.slug,
+            name: source.category.name,
+            nameEn: source.category.nameEn,
+            sortOrder: source.category.sortOrder,
+          }
+        : null,
       items: source.items.map((ci) => this.toCaseItemView(ci)),
     };
   }

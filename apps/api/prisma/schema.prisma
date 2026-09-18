@@ -244,6 +244,36 @@ model Item {
   @@map("items")
 }
 
+/// A shelf in the catalogue: "free cases", "by rarity", "collections".
+///
+/// A flat list of two hundred cases is not a catalogue, it is a wall. The
+/// grouping is data rather than an enum because it is merchandising — an
+/// operator adds a shelf for a holiday and removes it afterwards, and neither
+/// should be a deploy.
+model CaseCategory {
+  id   String @id @default(uuid()) @db.Uuid
+  slug String @unique
+
+  /// Display name in the base locale (Russian), and its English counterpart.
+  /// Nullable for the same reason `Case.nameEn` is: an untranslated shelf reads
+  /// worse than a translated one and far better than an empty heading.
+  name   String
+  nameEn String?
+
+  /// Where the shelf sits on the page. Shelves are ordered by an operator's
+  /// idea of importance, which no derived value can guess.
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cases Case[]
+
+  @@index([isActive, sortOrder])
+  @@map("case_categories")
+}
+
 model Case {
   id     String @id @default(uuid()) @db.Uuid
   slug   String @unique
@@ -256,10 +286,20 @@ model Case {
   /// than a translation but far better than an empty title.
   nameEn String?
 
+  /// A sentence or two under the title: what is in the case and what the best
+  /// outcome looks like. Nullable because a case without a description is a
+  /// case with a quieter page, not a broken one.
+  description   String?
+  descriptionEn String?
+
   price     Int
   imageUrl  String?
   isActive  Boolean @default(true)
   sortOrder Int     @default(0)
+
+  /// Which shelf it sits on. Nullable: a case without a category is not a
+  /// broken case, it is an ungrouped one, and it still has to render.
+  categoryId String? @db.Uuid
 
   /// RTP cached at the last recalculation, so listing pages need not recompute it.
   rtpCached       Float?
@@ -271,8 +311,10 @@ model Case {
   items       CaseItem[]
   openings    CaseOpening[]
   battleLines BattleCase[]
+  category    CaseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   @@index([isActive, sortOrder])
+  @@index([categoryId, sortOrder])
   @@map("cases")
 }
 

@@ -8,9 +8,11 @@ import {
   paginationSchema,
   steamSearchSchema,
   upsertCaseSchema,
+  upsertCaseCategorySchema,
   upsertPromoCodeSchema,
   settingDefinitions,
   type UpsertCaseInput,
+  type UpsertCaseCategoryInput,
   type UpsertPromoCodeInput,
 } from '@caseforge/shared';
 import { AdminService } from './admin.service';
@@ -86,6 +88,22 @@ export class AdminController {
   @Get('cases')
   listCases() {
     return this.admin.listCases();
+  }
+
+  /** The shelves the catalogue is grouped into. */
+  @Get('categories')
+  listCategories() {
+    return this.admin.listCategories();
+  }
+
+  @Post('categories')
+  @Roles(UserRole.ADMIN)
+  upsertCategory(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Body(new ZodValidationPipe(upsertCaseCategorySchema)) body: UpsertCaseCategoryInput,
+    @Req() request: FastifyRequest,
+  ) {
+    return this.admin.upsertCategory(actor.id, body, request.ip ?? null);
   }
 
   @Get('cases/:slug')

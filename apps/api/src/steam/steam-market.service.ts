@@ -47,12 +47,27 @@ export class SteamMarketService {
 
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 
-  /** Market search — the source of images, rarity and a reference price. */
-  async search(query: string, count = 20): Promise<SteamMarketItem[]> {
+  /**
+   * Market search — the source of images, rarity and a reference price.
+   *
+   * Two options exist for one reason: importing a catalogue written in another
+   * language. `locale` asks Steam to answer in that language, and the response
+   * then carries the localised name in `name` while `marketHashName` stays the
+   * English key it always is — which is exactly what turns «AWP | Гиперзверь»
+   * into `AWP | Hyper Beast` without a dictionary. `start` pages through a
+   * weapon with more skins than one response can hold.
+   */
+  async search(
+    query: string,
+    count = 20,
+    options: { start?: number; locale?: 'english' | 'russian' } = {},
+  ): Promise<SteamMarketItem[]> {
     const trimmed = query.trim();
     if (trimmed.length < 2) return [];
 
-    const cacheKey = `steam:search:${trimmed.toLowerCase()}:${count}`;
+    const start = Math.max(0, Math.trunc(options.start ?? 0));
+    const locale = options.locale ?? 'english';
+    const cacheKey = `steam:search:${locale}:${start}:${trimmed.toLowerCase()}:${count}`;
     const cached = await this.redis.get(cacheKey);
     if (cached) return JSON.parse(cached) as SteamMarketItem[];
 
@@ -60,25 +75,30 @@ export class SteamMarketService {
     url.searchParams.set('appid', String(CS2_APP_ID));
     url.searchParams.set('norender', '1');
     url.searchParams.set('count', String(Math.min(count, 100)));
-    url.searchParams.set('start', '0');
+    url.searchParams.set('start', String(start));
     url.searchParams.set('query', trimmed);
+    if (locale !== 'english') url.searchParams.set('l', locale);
 
     const payload = await this.request(url);
     const items = parseSearchResponse(payload);
 
     await this.redis.set(cacheKey, JSON.stringify(items), 'EX', SEARCH_TTL_SEC);
     // Cache metadata per item: the import reads it from here, so no separate
-    // Steam round trip is needed for each item.
-    await Promise.all(
-      items.map((item) =>
-        this.redis.set(
-          this.metaKey(item.marketHashName),
-          JSON.stringify(item),
-          'EX',
-          ITEM_META_TTL_SEC,
+    // Steam round trip is needed for each item. Only the English answers go in
+    // — a localised one would leave the item named «AWP | Гиперзверь» for every
+    // import that follows.
+    if (locale === 'english') {
+      await Promise.all(
+        items.map((item) =>
+          this.redis.set(
+            this.metaKey(item.marketHashName),
+            JSON.stringify(item),
+            'EX',
+            ITEM_META_TTL_SEC,
+          ),
         ),
-      ),
-    );
+      );
+    }
 
     return items;
   }
