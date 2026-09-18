@@ -244,6 +244,16 @@ maintenance for an audience of a few people.
   recent drops, switchable off in one setting
 - **a catalogue importer**: a survey file of shelves, cases and item names
   becomes a working catalogue — odds solved, art drawn and descriptions composed
+- **deposit skins for balance**: pick items out of your own Steam inventory, a
+  farm bot asks for them, and the balance is credited when you accept — priced
+  at a payout rate the operator sets, and frozen at the moment of the request
+- **payments behind a provider port**: a record that survives the checkout, a
+  signature-verified webhook, crediting that happens exactly once however many
+  times a provider retries, and a demo adapter that signs for real
+- **identity checks**, off by default, reviewed by an operator, gating
+  withdrawals past a cumulative threshold
+- **CRM reports**: the ledger, payments, withdrawals and skin deposits as CSV,
+  plus a per-channel money summary over a period
 - **case builder in the CRM**: Steam market search, import with image, rarity
   and price, a case image, auto-solved odds for a target RTP, a live margin verdict
 - **prices and images from Steam**: hourly synchronisation, RTP recalculation for
@@ -295,9 +305,20 @@ maintenance for an audience of a few people.
 
 ## What is not there yet
 
-Stages 1 to 3 of the roadmap (section 14 of the architecture document), bar item
-deposits. Not implemented: real payments, depositing items from Steam, KYC and
-the full CRM reporting of stage 4.
+Stages 1 to 4 of the roadmap (section 14 of the architecture document) are in
+place. What stage 4 does **not** include is worth naming precisely, because the
+difference is not obvious from the outside:
+
+- **No live payment provider.** The port is there — a record, a checkout
+  redirect, a signature-verified webhook, idempotent crediting — with a signed
+  demo adapter as its first implementation. A real provider is an adapter and a
+  merchant account, not a redesign.
+- **No third-party identity verification.** Applications are reviewed by an
+  operator. A provider integration is a contract, a data-processing agreement
+  and a per-check fee, none of which a codebase decides on its own.
+- **No encryption at rest for identity documents, and no retention schedule.**
+  Both are properties of the volume and the jurisdiction. A deployment that
+  switches identity checks on owes both, and nothing here implies otherwise.
 
 ---
 
@@ -698,6 +719,109 @@ the case list and in the builder.
 One detail about names: knives and gloves carry a `★` prefix on the market
 (`★ Karambit | Marble Fade (Factory New)`). Without the star Steam does not know
 the item, and neither the price nor the image will resolve.
+
+---
+
+## Depositing skins
+
+`/deposit/items`. A player picks items out of their own Steam inventory, a farm
+bot asks for them in a trade offer, and the balance is credited once they
+accept. The mirror of a withdrawal, and it inherits that flow's rule: **the
+valuation is frozen when the request is made.** Somebody quoted 4 200 is
+credited 4 200 even if the market moves while the offer waits in Steam — the
+number they agreed to is the number a dispute would be about.
+
+Prices are always the site's own. The browser sends asset ids and nothing else,
+because a client that could name its own price could name any price. A skin the
+catalogue has never carried has no price here and is refused rather than guessed
+at. Items that cannot be deposited are listed with the reason instead of being
+hidden: a player whose knife is missing from the grid needs to know it is a
+trade hold and not a bug.
+
+The work is split so only one half can create money. The bot worker owns the
+trade — it asks, watches and records what Steam said — and stops at `ACCEPTED`.
+The API owns the ledger and turns `ACCEPTED` into a credit on a sweep, with the
+update conditional on the row still being `ACCEPTED` so two overlapping sweeps
+cannot pay twice for the same skins.
+
+The payout rate, the minimum, the cap on items per offer and the offer lifetime
+are settings. Balance that arrived as skins is its own transaction type — the
+item channel has a different margin and a different risk from a card top-up, and
+one ledger line that mixed them could describe neither.
+
+---
+
+## Payments
+
+A port, not a provider. An adapter turns one payment company's field names,
+signature scheme and status vocabulary into two operations — send the player
+somewhere to pay, then be told whether they did — and everything after that is
+the same whichever adapter answered.
+
+**A redirect never moves money.** A player arriving back on the success page has
+proved they can type a URL; only a webhook that survives signature verification
+credits a balance. The adapter is handed the raw body, because a signature
+covers exact bytes and a body parsed and re-serialised is a different sequence
+of them.
+
+Crediting is a conditional update on the payment row, so a provider retrying a
+confirmation finds it already `SUCCEEDED` and does nothing — no separate
+"processed" flag to keep in step. A confirmation for less than was asked is
+refused outright. A notification about a payment the site never heard of is
+answered 200 and ignored, because a 4xx only makes a provider retry for a week.
+
+The shipped adapter is a demo one that signs its webhooks for real, so the one
+endpoint that credits money without an authenticated caller is exercised rather
+than assumed. `pnpm test:smoke:payments` checks the three things that matter: a
+forged signature is refused, a signed confirmation credits exactly once however
+many times it arrives, and a short confirmation credits nothing.
+
+---
+
+## Identity checks
+
+Off by default — collecting identity documents is a legal commitment, not a
+feature to switch on absent-mindedly. With the setting off nothing is asked for
+and nothing is stored.
+
+Applications are reviewed by a person in `/admin/kyc`, oldest first. A rejection
+carries a reason and the player is shown it; "rejected" with nothing else is an
+invitation to submit the same thing again. An approved application cannot be
+overwritten, or the check would be decorative.
+
+The gate is **cumulative**: it counts what a player has withdrawn over their
+lifetime rather than the size of the request in front of them, because splitting
+one large withdrawal into ten small ones is the obvious way around a per-request
+limit. It is checked inside the transaction that locks the items, so two
+requests sent at once cannot both pass the same remaining allowance.
+
+Documents stay out of Postgres — scans in a database column are scans in every
+backup, replica and slow-query log. The row holds a generated path into
+`KYC_STORAGE_DIR`, written `0600` and served only through an authenticated
+endpoint with `no-store`. The request names a document by id and the path is
+resolved from the row, so there is no path in the request to traverse with.
+
+**What this does not do**, and a deployment that turns it on owes: encryption at
+rest for that directory, and a retention schedule.
+
+---
+
+## Reports
+
+`/admin/finance`, and four exports under `/api/admin/reports`. The dashboard
+answers "how are we doing"; these answer "show me the rows" — reconciling
+against a bank statement, answering a chargeback, handing an accountant
+something.
+
+Every figure comes from the transaction ledger rather than from the tables the
+money passed through: a payment row says what a provider was asked for, the
+ledger says what landed on a balance, and when the two disagree the ledger is
+right by construction. Channels stay apart in the summary because they are not
+interchangeable — a card top-up is cash with a processing fee, a skin deposit is
+inventory bought at a discount, and a bonus is a cost.
+
+Exports carry a UTF-8 BOM, without which Excel reads a Cyrillic nickname as
+mojibake, and are fetched with the session attached rather than linked to.
 
 ---
 

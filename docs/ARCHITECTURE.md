@@ -104,6 +104,17 @@ The key entities (full schema in `apps/api/prisma/schema.prisma`):
 - **Referral** — who invited whom, written once and never re-pointed
 - **ReferralEarning** — one commission accrual, off the ledger until it is claimed
 - **Setting** — a runtime setting, keyed by the shared registry
+- **Payment** — one attempt to put money on a balance. The row exists before the
+  player reaches a checkout and survives whatever happens there, so a provider
+  that confirms twice — or confirms something the site never heard of — meets a
+  record that already knows its own state
+- **ItemDeposit / ItemDepositItem** — skins handed to the site for balance: the
+  mirror of a withdrawal, with the valuation frozen on the request so a market
+  move while the offer waits in Steam cannot change what was promised
+- **KycApplication / KycDocument** — an identity check and its papers. One row
+  per player rather than one per attempt: what matters operationally is the
+  current standing. The document bytes are deliberately not in Postgres — a
+  scan in a column is a scan in every backup, replica and slow-query log
 - **Withdrawal** — a withdrawal request, carrying the channel that fills it
 - **WithdrawalItem** — one line of a request: what it asked for, recorded once
 - **MarketAccount** — one market.csgo.com key the site buys through
