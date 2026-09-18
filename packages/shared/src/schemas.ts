@@ -103,6 +103,18 @@ export const requestWithdrawalSchema = z.object({
 });
 
 export const upsertCaseSchema = z.object({
+  /**
+   * The shelf, by slug rather than by id: a seed file and an operator both
+   * think in "collections", not in a UUID, and the slug is the thing that
+   * survives a re-import.
+   */
+  categorySlug: z
+    .string()
+    .trim()
+    .max(64)
+    .regex(/^[a-z0-9-]*$/, 'category: lowercase latin letters, digits and hyphens only')
+    .nullable()
+    .optional(),
   slug: z
     .string()
     .trim()
@@ -111,8 +123,29 @@ export const upsertCaseSchema = z.object({
     .regex(/^[a-z0-9-]+$/, 'slug: lowercase latin letters, digits and hyphens only'),
   name: z.string().trim().min(2).max(128),
   nameEn: z.string().trim().max(128).nullable().optional(),
+  /**
+   * The paragraph under the title, in both locales. Capped rather than free:
+   * a case page has room for a couple of sentences, and anything longer is a
+   * landing page somebody pasted into the wrong field.
+   */
+  description: z.string().trim().max(600).nullable().optional(),
+  descriptionEn: z.string().trim().max(600).nullable().optional(),
   price: z.number().int().positive(),
-  imageUrl: z.string().url().nullable().optional(),
+  /**
+   * Either an absolute URL — a Steam image, a CDN — or a root-relative path,
+   * because case art the site draws and serves itself is not a lesser kind of
+   * image than one borrowed from Steam.
+   */
+  imageUrl: z
+    .string()
+    .trim()
+    .max(2048)
+    .refine(
+      (v) => v.startsWith('/') || /^https?:\/\//.test(v),
+      'imageUrl: an absolute http(s) URL or a path starting with /',
+    )
+    .nullable()
+    .optional(),
   isActive: z.boolean().default(true),
   sortOrder: z.number().int().min(0).max(9999).default(0),
   items: z
@@ -152,6 +185,21 @@ export const adjustBalanceSchema = z.object({
     .refine((v) => v !== 0, 'amount must not be zero'),
   reason: z.string().trim().min(3).max(500),
 });
+
+/** Creating or renaming a shelf. */
+export const upsertCaseCategorySchema = z.object({
+  slug: z
+    .string()
+    .trim()
+    .min(2)
+    .max(64)
+    .regex(/^[a-z0-9-]+$/, 'slug: lowercase latin letters, digits and hyphens only'),
+  name: z.string().trim().min(2).max(64),
+  nameEn: z.string().trim().max(64).nullable().optional(),
+  sortOrder: z.number().int().min(0).max(9999).default(0),
+  isActive: z.boolean().default(true),
+});
+export type UpsertCaseCategoryInput = z.infer<typeof upsertCaseCategorySchema>;
 
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

@@ -85,25 +85,45 @@ export function parseSteamPrice(text: string | null | undefined): number | null 
  * "★ Covert Knife", "StatTrak™ Mil-Spec Grade SMG". Knives and gloves carry a
  * star and are always the top tier on case sites, so the star is checked
  * before the worded grade.
+ *
+ * Both languages are understood, because the type string is localised along
+ * with the rest of the response: a search asked with `l=russian` answers
+ * "Винтовка, Тайное", and reading only English out of that silently files
+ * every skin in the catalogue as Consumer Grade. The Russian words are here
+ * rather than in the importer that needs them so that the one function that
+ * claims to parse a Steam rarity actually parses the ones Steam sends.
  */
 export function parseSteamRarity(type: string | null | undefined): ItemRarity {
   if (!type) return ItemRarity.CONSUMER;
 
   if (type.includes('★')) return ItemRarity.EXTRAORDINARY;
 
-  const lowered = type.toLowerCase();
+  // `ё` is folded to `е`: Steam writes "Запрещённое" and half the world types
+  // it without the diaeresis, and a rarity must not hinge on that.
+  const lowered = type.toLowerCase().replace(/ё/g, 'е');
 
   // Order matters: top tiers first, otherwise a broader word would swallow
   // "Extraordinary".
-  if (lowered.includes('contraband')) return ItemRarity.EXTRAORDINARY;
-  if (lowered.includes('extraordinary')) return ItemRarity.EXTRAORDINARY;
-  if (lowered.includes('covert')) return ItemRarity.COVERT;
+  if (lowered.includes('contraband') || lowered.includes('контрабанда')) {
+    return ItemRarity.EXTRAORDINARY;
+  }
+  if (lowered.includes('extraordinary') || lowered.includes('экстраординарное')) {
+    return ItemRarity.EXTRAORDINARY;
+  }
+  if (lowered.includes('covert') || lowered.includes('тайное')) return ItemRarity.COVERT;
   if (lowered.includes('classified') || lowered.includes('exotic')) return ItemRarity.CLASSIFIED;
+  if (lowered.includes('засекреченное')) return ItemRarity.CLASSIFIED;
   if (lowered.includes('restricted') || lowered.includes('remarkable')) {
     return ItemRarity.RESTRICTED;
   }
+  // Checked after "засекреченное": the two share a prefix and only the whole
+  // word tells a Restricted skin from a Classified one.
+  if (lowered.includes('запрещенное')) return ItemRarity.RESTRICTED;
   if (lowered.includes('mil-spec') || lowered.includes('high grade')) return ItemRarity.MILSPEC;
-  if (lowered.includes('industrial')) return ItemRarity.INDUSTRIAL;
+  if (lowered.includes('армейское')) return ItemRarity.MILSPEC;
+  if (lowered.includes('industrial') || lowered.includes('промышленное')) {
+    return ItemRarity.INDUSTRIAL;
+  }
 
   return ItemRarity.CONSUMER;
 }

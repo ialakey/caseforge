@@ -50,15 +50,37 @@ export interface CaseItemView {
   rangeTo: number;
 }
 
+/** A shelf in the catalogue, as the storefront and the panel both read it. */
+export interface CaseCategoryView {
+  id: string;
+  slug: string;
+  name: string;
+  /** English display name; falls back to `name` when absent. */
+  nameEn: string | null;
+  sortOrder: number;
+}
+
 export interface CaseView {
   id: string;
   slug: string;
   name: string;
   /** English display name; falls back to `name` when absent. */
   nameEn: string | null;
+  /**
+   * The paragraph under the title, and its English counterpart. Both nullable:
+   * the storefront omits the paragraph rather than printing a placeholder.
+   */
+  description: string | null;
+  descriptionEn: string | null;
   price: number;
   imageUrl: string | null;
   isActive: boolean;
+  /**
+   * The shelf it sits on, or null for an ungrouped case. Null is not an error
+   * state: the storefront gathers ungrouped cases into a shelf of their own so
+   * a case can never become unreachable by losing its category.
+   */
+  category: CaseCategoryView | null;
   items: CaseItemView[];
 }
 

@@ -51,6 +51,26 @@ test('rarity from the item type', () => {
   assert.equal(parseSteamRarity('Covert Rifle'), ItemRarity.COVERT);
 });
 
+// A search asked in Russian answers with a Russian type string. Reading only
+// English out of it files the whole catalogue as Consumer Grade, which is how
+// the first run of the catalogue importer silently flattened every rarity.
+test('rarity from a localised item type', () => {
+  assert.equal(parseSteamRarity('Пистолет, Ширпотреб'), ItemRarity.CONSUMER);
+  assert.equal(parseSteamRarity('Дробовик, Промышленное качество'), ItemRarity.INDUSTRIAL);
+  assert.equal(parseSteamRarity('Пистолет-пулемёт, Армейское качество'), ItemRarity.MILSPEC);
+  assert.equal(parseSteamRarity('Винтовка, Запрещённое'), ItemRarity.RESTRICTED);
+  assert.equal(parseSteamRarity('Пистолет, Засекреченное'), ItemRarity.CLASSIFIED);
+  assert.equal(parseSteamRarity('Винтовка, Тайное'), ItemRarity.COVERT);
+  assert.equal(parseSteamRarity('Перчатки, Экстраординарное'), ItemRarity.EXTRAORDINARY);
+});
+
+// "Запрещённое" and "Засекреченное" share four letters; a prefix match would
+// collapse Restricted into Classified.
+test('localised Restricted and Classified are told apart', () => {
+  assert.equal(parseSteamRarity('Винтовка, Запрещенное'), ItemRarity.RESTRICTED);
+  assert.equal(parseSteamRarity('Винтовка, Засекреченное'), ItemRarity.CLASSIFIED);
+});
+
 test('StatTrak and Souvenir do not change the rarity', () => {
   assert.equal(parseSteamRarity('StatTrak™ Classified Rifle'), ItemRarity.CLASSIFIED);
   assert.equal(parseSteamRarity('Souvenir Restricted Rifle'), ItemRarity.RESTRICTED);
