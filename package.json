@@ -12,6 +12,10 @@
     "typecheck": "pnpm -r typecheck",
     "infra:up": "docker compose up -d",
     "infra:down": "docker compose down",
+    "infra:up:scale": "docker compose --profile scale up -d",
+    "infra:down:scale": "docker compose --profile scale down",
+    "infra:replica:init": "node tools/infra/init-replication.mjs",
+    "infra:replica:status": "node tools/infra/replica-status.mjs",
     "db:migrate": "pnpm --filter @caseforge/api db:migrate",
     "db:seed": "pnpm --filter @caseforge/api db:seed",
     "db:studio": "pnpm --filter @caseforge/api db:studio",
@@ -23,6 +27,7 @@
     "test:smoke:bonus": "pnpm --filter @caseforge/api test:smoke:bonus",
     "test:smoke:admin": "pnpm --filter @caseforge/api test:smoke:admin",
     "test:smoke:battles": "pnpm --filter @caseforge/api test:smoke:battles",
+    "test:load": "pnpm --filter @caseforge/api test:load",
     "seed:cases": "pnpm --filter @caseforge/api seed:cases"
   },
   "devDependencies": {

@@ -32,6 +32,108 @@ services:
       timeout: 3s
       retries: 10
 
+  # ---------------------------------------------------------------------------
+  # The "scale" profile: the shape the site is meant to run in under load.
+  #
+  # Off by default — `pnpm infra:up` brings up Postgres and Redis and nothing
+  # else, because a connection pooler and a replica are pure overhead on a
+  # laptop running one API instance. `pnpm infra:up:scale` adds both, and then
+  # `pnpm test:load` measures something worth measuring.
+  # ---------------------------------------------------------------------------
+
+  # Transaction pooling in front of Postgres.
+  #
+  # Node keeps a connection pool per process, so `max_connections` is spent by
+  # the number of API instances times their pool size, and it runs out long
+  # before the database is actually busy. PgBouncer in transaction mode hands a
+  # server connection to a transaction rather than to a client, which turns a
+  # thousand idle application connections into a couple of dozen real ones.
+  #
+  # Prisma's prepared statements are what usually breaks behind a transaction
+  # pooler; pgbouncer has tracked them since 1.21, and `MAX_PREPARED_STATEMENTS`
+  # is what switches that on. The `?pgbouncer=true` flag in the URL is the belt
+  # to that braces.
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: csgo_case_pgbouncer
+    profiles: ["scale"]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgres://csgo:csgo@postgres:5432/csgo_case"
+      POOL_MODE: transaction
+      AUTH_TYPE: scram-sha-256
+      # Clients the pooler will accept, against the server connections it will
+      # actually open. That ratio is the entire point of running it.
+      MAX_CLIENT_CONN: 1000
+      DEFAULT_POOL_SIZE: 25
+      MIN_POOL_SIZE: 5
+      RESERVE_POOL_SIZE: 5
+      RESERVE_POOL_TIMEOUT: 3
+      MAX_PREPARED_STATEMENTS: 200
+      # A pooled connection that has been idle this long is closed rather than
+      # held against the server's limit.
+      SERVER_IDLE_TIMEOUT: 60
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,options
+      ADMIN_USERS: csgo
+      # The image listens on 5432 by default, which is the one port a Postgres
+      # pooler should not claim: it makes "is this the database or the pooler?"
+      # a question nobody can answer from a connection string.
+      LISTEN_PORT: 6432
+    ports:
+      - "6433:6432"
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=csgo psql -h 127.0.0.1 -p 6432 -U csgo -d pgbouncer -tAc 'SHOW POOLS' > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # A streaming read replica.
+  #
+  # It bootstraps itself: on an empty volume it takes a `pg_basebackup` of the
+  # primary and starts as a hot standby. It needs a replication role and a
+  # `pg_hba` line on the primary first, which `pnpm infra:replica:init` adds to
+  # the running primary without recreating it — a dev database that already
+  # holds a seeded catalogue must not have to be thrown away to gain a replica.
+  postgres-replica:
+    image: postgres:16-alpine
+    container_name: csgo_case_pg_replica
+    profiles: ["scale"]
+    restart: unless-stopped
+    user: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: replica
+      PGUSER: replicator
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        if [ ! -s "$$PGDATA/PG_VERSION" ]; then
+          echo "Taking a base backup of the primary..."
+          rm -rf "$$PGDATA"/*
+          # -R writes standby.signal and primary_conninfo, which is what makes
+          # this a streaming standby rather than a one-off copy.
+          pg_basebackup -h postgres -p 5432 -D "$$PGDATA" -Fp -Xs -R -P
+          chmod 0700 "$$PGDATA"
+        fi
+        exec postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgreplica:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U replicator -d csgo_case"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
 volumes:
   pgdata:
   redisdata:
+  pgreplica:
