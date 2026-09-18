@@ -106,6 +106,22 @@ pnpm db:seed                               # only the demo administrator and the
 Ports 5433 and 6380 are deliberately non-standard so they do not clash with a
 locally installed Postgres or Redis.
 
+### Or from the published images
+
+Every tagged release publishes three images to GitHub Packages:
+
+```bash
+docker pull ghcr.io/ialakey/caseforge-api:0.1.0
+docker pull ghcr.io/ialakey/caseforge-web:0.1.0
+docker pull ghcr.io/ialakey/caseforge-bot:0.1.0
+```
+
+The API image carries the Prisma schema and migrations, so a deployment runs
+`prisma migrate deploy` from the same artefact it is about to start. The web
+image bakes `NEXT_PUBLIC_API_URL` at build time — that is how Next works — so an
+image built for one deployment cannot be pointed at another's API by changing
+the environment; build your own with `--build-arg` for anything but a local try.
+
 The catalogue of 20 themed cases is populated by a separate command. It talks to
 Steam and therefore takes about ten minutes:
 

@@ -118,6 +118,22 @@ pnpm seed:cases
 Порты 5433/6380 выбраны намеренно нестандартными, чтобы не конфликтовать
 с локально установленными Postgres и Redis.
 
+### Или из опубликованных образов
+
+Каждый релиз с тегом публикует три образа в GitHub Packages:
+
+```bash
+docker pull ghcr.io/ialakey/caseforge-api:0.1.0
+docker pull ghcr.io/ialakey/caseforge-web:0.1.0
+docker pull ghcr.io/ialakey/caseforge-bot:0.1.0
+```
+
+Образ API несёт схему Prisma и миграции, поэтому `prisma migrate deploy`
+запускается из того же артефакта, который потом стартует. В образ web
+`NEXT_PUBLIC_API_URL` вшивается на сборке — так устроен Next, — поэтому образ,
+собранный под одну установку, нельзя переменной окружения направить на чужой
+API: для чего-то серьёзнее локальной пробы собирайте свой с `--build-arg`.
+
 ### Проверка
 
 ```bash
