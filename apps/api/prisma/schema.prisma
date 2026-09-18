@@ -91,6 +91,14 @@ enum BonusKind {
 /// none of them changes what this site does: either the money arrived and the
 /// balance moves, or it did not.
 /// How far a player's identity check has got.
+/// Where a skin giveaway has got to.
+enum GiveawayStatus {
+  SCHEDULED // created; entries not open yet
+  OPEN // accepting entries
+  DRAWN // a winner has been picked and the prize handed over
+  CANCELLED // called off; nothing was given away
+}
+
 enum KycStatus {
   NONE // never applied
   PENDING // submitted, waiting for an operator
@@ -229,6 +237,8 @@ model User {
   withdrawals  Withdrawal[]
   itemDeposits ItemDeposit[]
   payments     Payment[]
+  giveawayEntries GiveawayEntry[]
+  giveawaysWon    Giveaway[]       @relation("GiveawayWinner")
   kyc          KycApplication?  @relation("KycSubject")
   kycReviews   KycApplication[] @relation("KycReviewer")
   upgrades     Upgrade[]
@@ -288,6 +298,7 @@ model Item {
   marketPurchases MarketPurchase[]
   withdrawalLines WithdrawalItem[]
   depositLines    ItemDepositItem[]
+  giveaways       Giveaway[]
 
   @@index([rarity])
   @@index([isActive])
@@ -1236,6 +1247,77 @@ model MarketAccount {
 
   @@index([status])
   @@map("market_accounts")
+}
+
+/// A skin given away to one of the players who entered.
+///
+/// Entry is earned rather than bought: a player qualifies by having topped up
+/// at least `minDeposit` while the giveaway was open, and then has to press the
+/// button. Both halves matter — the threshold is what the promotion is for, and
+/// the button is what keeps the entrant list to people who actually want the
+/// thing rather than everybody who happened to deposit.
+///
+/// The draw is provably fair on the same machinery as a case opening. The seed
+/// hash is published while entries are open and the seed itself is revealed
+/// afterwards, so anybody can recompute the winner. The client seed is derived
+/// from the entrant list, which is what stops the house from waiting for a roll
+/// it likes: it cannot know the seed's effect until entries close.
+model Giveaway {
+  id     String         @id @default(uuid()) @db.Uuid
+  status GiveawayStatus @default(SCHEDULED)
+
+  /// The prize, from the catalogue. Restrict on delete: a giveaway that gave
+  /// away an item is a record of what somebody won, and it has to keep saying
+  /// what that was.
+  itemId String @db.Uuid
+
+  title   String
+  titleEn String?
+
+  /// Minimum topped up while this giveaway was open, in minor units. Zero
+  /// means anybody signed in may enter.
+  minDeposit Int @default(0)
+
+  opensAt DateTime
+  drawsAt DateTime
+
+  /// Published while entries are open; the seed itself is not.
+  serverSeed     String
+  serverSeedHash String
+
+  /// Filled at the draw, and all three are needed to re-check it by hand.
+  clientSeed   String?
+  roll         Int?
+  winnerUserId String?   @db.Uuid
+  drawnAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  item    Item            @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  winner  User?           @relation("GiveawayWinner", fields: [winnerUserId], references: [id], onDelete: SetNull)
+  entries GiveawayEntry[]
+
+  @@index([status, drawsAt])
+  @@map("giveaways")
+}
+
+/// One player's entry. At most one per giveaway, enforced by the database
+/// rather than by a check-then-insert that two clicks could race past.
+model GiveawayEntry {
+  id         String @id @default(uuid()) @db.Uuid
+  giveawayId String @db.Uuid
+  userId     String @db.Uuid
+
+  createdAt DateTime @default(now())
+
+  giveaway Giveaway @relation(fields: [giveawayId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([giveawayId, userId])
+  /// The draw reads every entry of one giveaway in a fixed order.
+  @@index([giveawayId, createdAt])
+  @@map("giveaway_entries")
 }
 
 /// A player's identity check, reviewed by an operator.

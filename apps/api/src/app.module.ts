@@ -15,6 +15,7 @@ import { WithdrawalsModule } from './withdrawals/withdrawals.module';
 import { ItemDepositsModule } from './deposits/item-deposits.module';
 import { PaymentsModule } from './payments/payments.module';
 import { KycModule } from './kyc/kyc.module';
+import { GiveawaysModule } from './giveaways/giveaways.module';
 import { UpgradeModule } from './upgrade/upgrade.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { BonusModule } from './bonus/bonus.module';
@@ -40,6 +41,7 @@ import { AdminModule } from './admin/admin.module';
     ItemDepositsModule,
     PaymentsModule,
     KycModule,
+    GiveawaysModule,
     UpgradeModule,
     ContractsModule,
     BonusModule,

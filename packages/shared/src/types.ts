@@ -185,6 +185,56 @@ export interface FreeCaseStatus {
   nextOpenAt: string | null;
 }
 
+export type GiveawayStatus = 'SCHEDULED' | 'OPEN' | 'DRAWN' | 'CANCELLED';
+
+/**
+ * A skin giveaway as the landing page shows it.
+ *
+ * `serverSeed` is absent while entries are open and present once drawn — the
+ * shape is the promise: the hash is published up front, the seed only after
+ * it can no longer be used to choose a moment.
+ */
+export interface GiveawayView {
+  id: string;
+  status: GiveawayStatus;
+  title: string;
+  titleEn: string | null;
+
+  prize: {
+    itemName: string;
+    imageUrl: string | null;
+    rarity: ItemRarity;
+    /** What the prize is worth, in minor units. */
+    price: number;
+  };
+
+  /** Topped up while this giveaway is open to qualify, in minor units. */
+  minDeposit: number;
+  opensAt: string;
+  drawsAt: string;
+
+  entryCount: number;
+
+  /** Published while open, so the draw can be re-checked afterwards. */
+  serverSeedHash: string;
+  /** Revealed only once drawn. */
+  serverSeed: string | null;
+  clientSeed: string | null;
+  roll: number | null;
+
+  winner: { id: string; username: string; avatarUrl: string | null } | null;
+  drawnAt: string | null;
+}
+
+/** One player measured against one giveaway's terms. */
+export interface GiveawayStanding {
+  giveawayId: string;
+  /** Topped up by this player since the giveaway opened, in minor units. */
+  deposited: number;
+  entered: boolean;
+  canEnter: boolean;
+}
+
 /**
  * The counters along the top of the landing page.
  *

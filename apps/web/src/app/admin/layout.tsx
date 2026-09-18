@@ -20,6 +20,7 @@ const TABS: Array<{ href: string; label: TranslationKey }> = [
   { href: '/admin/cases', label: 'admin.nav.cases' },
   { href: '/admin/promo', label: 'admin.nav.promo' },
   { href: '/admin/finance', label: 'admin.nav.finance' },
+  { href: '/admin/giveaways', label: 'admin.nav.giveaways' },
   { href: '/admin/kyc', label: 'admin.nav.kyc' },
   { href: '/admin/market', label: 'admin.nav.market' },
   { href: '/admin/bots', label: 'admin.nav.bots' },

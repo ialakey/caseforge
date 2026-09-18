@@ -5,6 +5,7 @@ import { BonusTeaser } from '../components/BonusTeaser';
 import { Hero } from '../components/Hero';
 import { SiteStatsBar } from '../components/SiteStatsBar';
 import { HomePromoCards } from '../components/HomePromoCards';
+import { GiveawaySection } from '../components/GiveawaySection';
 import { getPublicConfig } from '../lib/public-config';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -42,6 +43,9 @@ export default async function HomePage() {
 
       {/* The bonus with its countdown, and whatever promotion is running. */}
       {appearance.home.promoCards && <HomePromoCards />}
+
+      {/* The skins being given away. Renders nothing when none is running. */}
+      {appearance.home.giveaways && <GiveawaySection />}
 
       {/* A player who has a spin waiting should not have to find the bonus page
           to learn that — but the promo row above already says so when it is on,

@@ -36,6 +36,7 @@
     "test:smoke:battles": "pnpm --filter @caseforge/api test:smoke:battles",
     "test:smoke:analytics": "pnpm --filter @caseforge/api test:smoke:analytics",
     "test:smoke:payments": "pnpm --filter @caseforge/api test:smoke:payments",
+    "test:smoke:giveaways": "pnpm --filter @caseforge/api test:smoke:giveaways",
     "test:load": "pnpm --filter @caseforge/api test:load",
     "seed:cases": "pnpm --filter @caseforge/api seed:cases",
     "grant-admin": "pnpm --filter @caseforge/api grant-admin"

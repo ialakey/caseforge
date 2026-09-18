@@ -26,6 +26,12 @@ export const ErrorCode = {
   DEPOSIT_IN_PROGRESS: 'DEPOSIT_IN_PROGRESS',
   /** No farm bot is online and has room for the items. */
   NO_BOT_AVAILABLE: 'NO_BOT_AVAILABLE',
+  /** The giveaway is not open for entries. */
+  GIVEAWAY_CLOSED: 'GIVEAWAY_CLOSED',
+  /** Not enough topped up since the giveaway opened. */
+  GIVEAWAY_DEPOSIT_REQUIRED: 'GIVEAWAY_DEPOSIT_REQUIRED',
+  /** Already entered; one entry per player is the whole point. */
+  GIVEAWAY_ALREADY_ENTERED: 'GIVEAWAY_ALREADY_ENTERED',
   /** Identity checks are not in use on this deployment. */
   KYC_DISABLED: 'KYC_DISABLED',
   /** The date of birth given is under eighteen. */

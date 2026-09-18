@@ -28,6 +28,7 @@
     "test:smoke:battles": "node test/battle-smoke.mjs",
     "test:smoke:analytics": "node test/analytics-smoke.mjs",
     "test:smoke:payments": "node test/payments-smoke.mjs",
+    "test:smoke:giveaways": "node test/giveaway-smoke.mjs",
     "test:load": "node test/load.mjs",
     "seed:cases": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/seed-cases.js",
     "seed:catalogue": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/seed-catalogue.js",

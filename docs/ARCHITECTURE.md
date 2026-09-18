@@ -100,6 +100,11 @@ The key entities (full schema in `apps/api/prisma/schema.prisma`):
 - **Battle / BattleCase / BattlePlayer** — a case battle: the agreement, its case
   list with frozen prices, and its seats. What actually dropped lives in the
   `CaseOpening` rows that point back at the battle
+- **Giveaway / GiveawayEntry** — a skin given away to one entrant, drawn on the
+  same seed machinery as a case opening. The seed hash is published while
+  entries are open and the seed itself only afterwards; the client seed is a
+  hash of the entrant list, so the effect of the seed cannot be known before
+  entries close
 - **PromoCode / PromoRedemption** — a top-up promotion and each use of it
 - **Referral** — who invited whom, written once and never re-pointed
 - **ReferralEarning** — one commission accrual, off the ledger until it is claimed

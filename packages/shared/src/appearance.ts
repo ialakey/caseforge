@@ -148,6 +148,8 @@ export interface AppearanceConfig {
     statsBar: boolean;
     /** The daily bonus and the active promo code, side by side. */
     promoCards: boolean;
+    /** The skins being given away, with their countdowns. */
+    giveaways: boolean;
     bonusTeaser: boolean;
     caseFilters: boolean;
   };
@@ -263,7 +265,13 @@ export const DEFAULT_APPEARANCE: AppearanceConfig = {
   },
   nav: { battles: true, upgrade: true, contract: true, bonus: true, referral: true },
   dropFeed: { enabled: true, bestDrop: true },
-  home: { statsBar: true, promoCards: true, bonusTeaser: true, caseFilters: true },
+  home: {
+    statsBar: true,
+    promoCards: true,
+    giveaways: true,
+    bonusTeaser: true,
+    caseFilters: true,
+  },
   profiles: { public: true },
   footer: { note: { ru: '', en: '' }, telegram: '', discord: '', vk: '', steam: '' },
   seo: { description: { ru: '', en: '' } },
@@ -385,6 +393,7 @@ export function buildAppearance(read: (key: string) => unknown): AppearanceConfi
     home: {
       statsBar: flag('statsBar', true),
       promoCards: flag('promoCards', true),
+      giveaways: flag('giveaways', true),
       bonusTeaser: flag('homeBonusTeaser', true),
       caseFilters: flag('homeCaseFilters', true),
     },
@@ -471,6 +480,7 @@ export const APPEARANCE_SECTIONS: ReadonlyArray<{
     fields: [
       'appearance.statsBar',
       'appearance.promoCards',
+      'appearance.giveaways',
       'appearance.homeBonusTeaser',
       'appearance.homeCaseFilters',
     ],

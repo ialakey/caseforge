@@ -433,6 +433,14 @@ export const SETTINGS = {
     label: 'Landing page: the counters bar',
     hint: 'Cases opened, contracts, upgrades, battles, registered players and who is online right now. On a site that has just opened these are small numbers, and small numbers say the opposite of what the bar is for.',
   },
+  'appearance.giveaways': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Landing page: skin giveaways',
+    hint: 'The section with the skins being given away, their countdown and the entrant count. With no giveaway running it shows nothing regardless.',
+  },
   'appearance.promoCards': {
     group: 'appearance',
     kind: 'boolean',

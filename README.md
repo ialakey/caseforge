@@ -642,6 +642,56 @@ spin is one too many.
 
 ---
 
+## Skin giveaways
+
+A prize, a deadline, and a rule about who may enter: topping up at least the
+threshold while the giveaway is open, and then pressing the button. Both halves
+matter — the threshold is what the promotion is *for*, and the button keeps the
+entrant list to people who actually want the thing rather than everybody who
+happened to deposit that week.
+
+<p align="center">
+  <img src="docs/screenshots/en/giveaways.png" alt="Four giveaways with their prizes, countdowns and entrant counts" width="900">
+</p>
+
+<p align="center">
+  <em>Each card shows how far the player is from qualifying — "your top-ups: 0 of 1 000" is an instruction where a disabled button is a dead end. Higher thresholds carry better prizes, which is the whole shape of the promotion.</em>
+</p>
+
+**The winner is drawn on the same machinery as a case opening**, because this
+site's claim is that its randomness can be checked by hand and a raffle decided
+some other way would be the one place that claim did not hold:
+
+- the server seed is generated when the giveaway is created and its **hash is
+  published at once**; the seed itself is withheld until the draw;
+- the client seed is a **hash of the entrant list**, computed at the moment of
+  the draw — so the house knows the seed but cannot know its effect, because the
+  effect depends on who enters;
+- `roll = HMAC_SHA256(serverSeed, clientSeed:0) % 1 000 000`, and the winner is
+  entry number `roll % entrants`.
+
+Afterwards all three are published on the winners page, so anybody can
+recompute the result from the entrant list.
+
+**There is deliberately no "draw now".** The published hash stops the house
+changing the seed but cannot stop it choosing a *moment*: the server holds the
+seed, so anybody with database access could work out who would win as things
+stand and draw when the answer suits them. Binding the draw to a time announced
+with the giveaway is what removes that choice. An operator who wants it over
+sooner cancels it; they cannot bring the winner forward.
+
+One known imperfection, written down rather than left to be found: `roll %
+entrants` is very slightly biased. With 336 entrants, 64 of them are about 0.03%
+more likely than the rest. It is the same bias the ticket ranges already carry
+and far below the noise of who happens to enter.
+
+`pnpm test:smoke:giveaways` checks the parts that only exist end to end: the
+seed stays hidden until the draw, entering is refused without the top-up and
+refused twice for the same player, the prize reaches the winner's inventory, and
+the published numbers recompute to the same winner.
+
+---
+
 ## The site builder
 
 `/admin/appearance`. The name, the logo, the palette, the banner, which sections
