@@ -11,22 +11,11 @@ import { useT } from '../lib/settings';
  * browser. Keeping just the text in a client component preserves the
  * server-rendered case list.
  */
-export function CatalogueHeadings({
-  drops,
-  catalogue,
-}: {
-  drops: ReactNode;
-  catalogue: ReactNode;
-}) {
+export function CatalogueHeadings({ catalogue }: { catalogue: ReactNode }) {
   const t = useT();
 
   return (
     <>
-      <section>
-        <SectionHeading>{t('home.latestDrops')}</SectionHeading>
-        {drops}
-      </section>
-
       {/* The anchor the banner's call to action jumps to. */}
       <section id="cases" className="scroll-mt-24">
         <SectionHeading>{t('home.cases')}</SectionHeading>

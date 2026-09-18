@@ -5,7 +5,8 @@ import { Footer } from '../components/Footer';
 import { Header } from '../components/Header';
 import { ReferralCapture } from '../components/ReferralCapture';
 import { AnalyticsTracker } from '../components/AnalyticsTracker';
-import { getPublicConfig, themeStyle } from '../lib/public-config';
+import { LiveDrops } from '../components/LiveDrops';
+import { getDropStrip, getPublicConfig, themeStyle } from '../lib/public-config';
 
 /**
  * The title and description come from the appearance settings.
@@ -32,6 +33,11 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { appearance } = await getPublicConfig();
+  // Only fetched when the strip is switched on: an operator who turned the
+  // feed off should not be paying for its query on every page of the site.
+  const strip = appearance.dropFeed.enabled
+    ? await getDropStrip()
+    : { recent: [], best: null };
 
   return (
     // The lang attribute starts at the default locale and is corrected on the
@@ -47,6 +53,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             pointed at, the other reports a page view per navigation. */}
         <ReferralCapture />
         <AnalyticsTracker />
+
+        {/* Above the header, full width, on every page: the feed is chrome
+            rather than a section of the landing page, and a visitor who
+            arrives straight on a case should see the site is alive too. */}
+        {appearance.dropFeed.enabled && (
+          <LiveDrops
+            initial={strip.recent}
+            best={strip.best}
+            showBest={appearance.dropFeed.bestDrop}
+            profilesPublic={appearance.profiles.public}
+          />
+        )}
+
         <Header appearance={appearance} />
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:py-8">{children}</main>
         <Footer appearance={appearance} />

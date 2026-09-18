@@ -2,6 +2,7 @@ import { cache } from 'react';
 import {
   type AppearanceConfig,
   type FxRates,
+  type LiveDrop,
   DEFAULT_APPEARANCE,
   appearanceCssVariables,
 } from '@caseforge/shared';
@@ -61,4 +62,22 @@ export const getPublicConfig = cache(async (): Promise<PublicConfig> => {
  */
 export function themeStyle(appearance: AppearanceConfig): Record<string, string> {
   return appearanceCssVariables(appearance);
+}
+
+/**
+ * The drop strip's opening state, fetched on the server.
+ *
+ * Not cached at all, unlike the appearance: a feed rendered from a
+ * thirty-second-old snapshot would show the same "live" drops to everybody who
+ * loaded a page in that window, which is the one thing a live feed must not do.
+ * An unavailable API costs the visitor the strip, never the page.
+ */
+export async function getDropStrip(): Promise<{ recent: LiveDrop[]; best: LiveDrop | null }> {
+  try {
+    const response = await fetch(`${API_URL}/api/drops`, { cache: 'no-store' });
+    if (!response.ok) return { recent: [], best: null };
+    return (await response.json()) as { recent: LiveDrop[]; best: LiveDrop | null };
+  } catch {
+    return { recent: [], best: null };
+  }
 }

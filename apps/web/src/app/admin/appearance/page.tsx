@@ -25,7 +25,9 @@ const SECTION_TITLES: Record<string, TranslationKey> = {
   theme: 'admin.appearance.section.theme',
   hero: 'admin.appearance.section.hero',
   nav: 'admin.appearance.section.nav',
+  dropFeed: 'admin.appearance.section.dropFeed',
   home: 'admin.appearance.section.home',
+  profiles: 'admin.appearance.section.profiles',
   footer: 'admin.appearance.section.footer',
   seo: 'admin.appearance.section.seo',
 };

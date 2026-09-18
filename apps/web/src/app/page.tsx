@@ -3,7 +3,6 @@ import { CaseCatalogue } from '../components/CaseCatalogue';
 import { CatalogueHeadings } from '../components/CatalogueHeadings';
 import { BonusTeaser } from '../components/BonusTeaser';
 import { Hero } from '../components/Hero';
-import { LiveDrops } from '../components/LiveDrops';
 import { getPublicConfig } from '../lib/public-config';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -38,8 +37,9 @@ export default async function HomePage() {
           have to find the bonus page to learn that. */}
       {appearance.home.bonusTeaser && <BonusTeaser />}
 
+      {/* The drop feed used to be the first section here; it now lives above
+          the header, in the layout, on every page. */}
       <CatalogueHeadings
-        drops={appearance.home.dropFeed ? <LiveDrops /> : null}
         catalogue={<CaseCatalogue cases={cases} showFilters={appearance.home.caseFilters} />}
       />
     </div>
