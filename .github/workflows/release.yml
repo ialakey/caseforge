@@ -137,7 +137,7 @@ jobs:
             echo
             echo "PolyForm Noncommercial 1.0.0 — free for personal, hobby, research"
             echo "and public-institution use. **Commercial use needs written permission**"
-            echo "from the author: <prosoulk2017@gmail.com>. Attribution is a licence"
+            echo "from the author: <alakov.ilia@gmail.com>. Attribution is a licence"
             echo "term, not a courtesy — see [NOTICE](NOTICE)."
           } > notes.md
 
