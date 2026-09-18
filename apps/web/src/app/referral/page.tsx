@@ -215,27 +215,29 @@ export default function ReferralPage() {
         {summary.invitees.length === 0 ? (
           <p className="text-sm text-ink-faint">{t('referral.inviteesEmpty')}</p>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full whitespace-nowrap text-sm">
             <thead className="text-left text-xs uppercase tracking-wide text-ink-faint">
               <tr>
-                <th className="pb-2">{t('referral.colPlayer')}</th>
-                <th className="pb-2">{t('referral.colJoined')}</th>
-                <th className="pb-2 text-right">{t('referral.colEarned')}</th>
+                <th className="px-2 pb-2 first:pl-0 last:pr-0">{t('referral.colPlayer')}</th>
+                <th className="px-2 pb-2 first:pl-0 last:pr-0">{t('referral.colJoined')}</th>
+                <th className="px-2 pb-2 text-right first:pl-0 last:pr-0">
+                  {t('referral.colEarned')}
+                </th>
               </tr>
             </thead>
             <tbody>
               {summary.invitees.map((invitee) => (
                 <tr key={invitee.userId} className="border-t border-edge-subtle">
-                  <td className="py-2">
+                  <td className="px-2 py-2 first:pl-0 last:pr-0">
                     <span className="flex items-center gap-2">
                       <SteamAvatar src={invitee.avatarUrl} name={invitee.username} size={22} />
                       <span className="truncate">{invitee.username}</span>
                     </span>
                   </td>
-                  <td className="py-2 text-ink-faint">
+                  <td className="px-2 py-2 text-ink-faint first:pl-0 last:pr-0">
                     {new Date(invitee.joinedAt).toLocaleDateString(locale)}
                   </td>
-                  <td className="py-2 text-right">
+                  <td className="px-2 py-2 text-right first:pl-0 last:pr-0">
                     <Money value={invitee.earned} className="text-accent" />
                   </td>
                 </tr>
@@ -250,34 +252,44 @@ export default function ReferralPage() {
         {summary.earnings.length === 0 ? (
           <p className="text-sm text-ink-faint">{t('referral.earningsEmpty')}</p>
         ) : (
-          <table className="w-full text-sm">
+          <table className="w-full whitespace-nowrap text-sm">
             <thead className="text-left text-xs uppercase tracking-wide text-ink-faint">
               <tr>
-                <th className="pb-2">{t('referral.colPlayer')}</th>
-                <th className="pb-2">{t('referral.colKind')}</th>
-                <th className="pb-2 text-right">{t('referral.colSource')}</th>
-                <th className="pb-2 text-right">{t('referral.colRate')}</th>
-                <th className="pb-2 text-right">{t('referral.colAmount')}</th>
-                <th className="pb-2">{t('referral.colStatus')}</th>
-                <th className="pb-2">{t('referral.colWhen')}</th>
+                <th className="px-2 pb-2 first:pl-0 last:pr-0">{t('referral.colPlayer')}</th>
+                <th className="px-2 pb-2 first:pl-0 last:pr-0">{t('referral.colKind')}</th>
+                <th className="px-2 pb-2 text-right first:pl-0 last:pr-0">
+                  {t('referral.colSource')}
+                </th>
+                <th className="px-2 pb-2 text-right first:pl-0 last:pr-0">
+                  {t('referral.colRate')}
+                </th>
+                <th className="px-2 pb-2 text-right first:pl-0 last:pr-0">
+                  {t('referral.colAmount')}
+                </th>
+                <th className="px-2 pb-2 first:pl-0 last:pr-0">{t('referral.colStatus')}</th>
+                <th className="px-2 pb-2 first:pl-0 last:pr-0">{t('referral.colWhen')}</th>
               </tr>
             </thead>
             <tbody>
               {summary.earnings.map((earning) => (
                 <tr key={earning.id} className="border-t border-edge-subtle">
-                  <td className="py-2 truncate">{earning.username}</td>
-                  <td className="py-2 text-ink-muted">{t(`referral.kind${earning.kind}`)}</td>
-                  <td className="py-2 text-right">
+                  <td className="truncate px-2 py-2 first:pl-0 last:pr-0">{earning.username}</td>
+                  <td className="px-2 py-2 text-ink-muted first:pl-0 last:pr-0">
+                    {t(`referral.kind${earning.kind}`)}
+                  </td>
+                  <td className="px-2 py-2 text-right first:pl-0 last:pr-0">
                     <Money value={earning.sourceAmount} />
                   </td>
-                  <td className="py-2 text-right text-ink-faint">{earning.rateBps / 100}%</td>
-                  <td className="py-2 text-right">
+                  <td className="px-2 py-2 text-right text-ink-faint first:pl-0 last:pr-0">
+                    {earning.rateBps / 100}%
+                  </td>
+                  <td className="px-2 py-2 text-right first:pl-0 last:pr-0">
                     <Money value={earning.amount} className="text-accent" />
                   </td>
-                  <td className="py-2 text-xs text-ink-faint">
+                  <td className="px-2 py-2 text-xs text-ink-faint first:pl-0 last:pr-0">
                     {earning.claimedAt ? t('referral.statusPaid') : t('referral.statusPending')}
                   </td>
-                  <td className="py-2 text-xs text-ink-faint">
+                  <td className="px-2 py-2 text-xs text-ink-faint first:pl-0 last:pr-0">
                     {new Date(earning.createdAt).toLocaleDateString(locale)}
                   </td>
                 </tr>

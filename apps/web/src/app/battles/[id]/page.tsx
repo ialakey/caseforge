@@ -207,6 +207,26 @@ export default function BattlePage() {
   const canJoin =
     battle.status === 'WAITING' && user !== null && !seated && battle.filledSlots < battle.slots;
   const winner = battle.players.find((player) => player.isWinner);
+  /**
+   * A tie is the one outcome the result line cannot explain by itself: two
+   * equal totals with one winner reads as a bug unless the deciding drop is
+   * named. It is recomputed here from the drops on the page rather than sent
+   * by the server, because the rule is a function of them.
+   */
+  const tied =
+    winner !== undefined &&
+    battle.players.filter((player) => player.totalValue === winner.totalValue).length > 1;
+  const decidingDrop = tied
+    ? battle.drops
+        .filter((drop) => drop.slot === winner.slot)
+        .reduce(
+          (best, drop) =>
+            battle.mode === 'CRAZY'
+              ? Math.min(best, drop.item.price)
+              : Math.max(best, drop.item.price),
+          battle.mode === 'CRAZY' ? Number.MAX_SAFE_INTEGER : 0,
+        )
+    : 0;
   const activeCase =
     activeRound > 0 ? caseById.get(battle.order[activeRound - 1] ?? '') : undefined;
 
@@ -371,6 +391,11 @@ export default function BattlePage() {
                   username: winner.username,
                   amount: money(battle.totalValue ?? 0),
                 })}
+              </span>
+            )}
+            {tied && (
+              <span className="ml-2 text-ink-faint">
+                {t('battles.tiebreak', { amount: money(decidingDrop) })}
               </span>
             )}
           </p>
