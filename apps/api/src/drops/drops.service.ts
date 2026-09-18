@@ -17,8 +17,30 @@ export const DROPS_CHANNEL = 'drops:live';
  * about rows that never change. The feed is therefore kept as a list in Redis,
  * written as drops happen, and the database is only read to warm it.
  */
-const FEED_KEY = 'drops:recent';
+/**
+ * The backlog key carries a version.
+ *
+ * Entries are stored as serialised `LiveDrop`s, so the key is a cache of a
+ * shape, not just of data. When a field is added — `userId`, for the profile
+ * links — every entry already in Redis is missing it, and a deploy would serve
+ * that older shape until the list happened to cycle out. Bumping the suffix
+ * makes the new code start a fresh list, warmed from the database, and the old
+ * one expires on its own with no migration to run.
+ */
+const FEED_KEY = 'drops:recent:v2';
 const FEED_KEEP = 50;
+
+/**
+ * The priciest drop of the last day, cached.
+ *
+ * It is a scan over a day of openings, and the strip asks for it on every page
+ * load of the whole site — so it is computed at most once a minute. A minute
+ * of staleness on a "best of the day" card is invisible; the scan on every
+ * request would not be.
+ */
+const BEST_KEY = 'drops:best24h';
+const BEST_TTL_SEC = 60;
+const BEST_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Not every drop reaches the global feed: at peak that is tens of thousands of
@@ -62,6 +84,7 @@ export class DropsService {
 
     const drop: LiveDrop = {
       openingId: input.openingId,
+      userId: input.userId,
       username: user?.username ?? 'Player',
       avatarUrl: user?.avatarUrl ?? null,
       caseName: input.caseName,
@@ -115,6 +138,60 @@ export class DropsService {
     return drops.slice(0, limit);
   }
 
+  /**
+   * The priciest notable drop of the last day, or null on a quiet day.
+   *
+   * Null rather than a fallback to "the best ever": a card headed "drop of the
+   * day" showing something from three months ago is a lie the strip tells on
+   * every page, and an absent card says the same thing honestly.
+   */
+  async bestOfDay(): Promise<LiveDrop | null> {
+    try {
+      const cached = await this.redis.get(BEST_KEY);
+      // The empty string is a cached "nothing today" — without it a quiet day
+      // means the scan runs on every single request, which is exactly the load
+      // the cache exists to prevent.
+      if (cached !== null) return cached === '' ? null : (JSON.parse(cached) as LiveDrop);
+    } catch (err) {
+      this.logger.warn(`Best-drop cache unavailable, reading the database: ${String(err)}`);
+    }
+
+    const opening = await this.read.caseOpening.findFirst({
+      where: {
+        createdAt: { gte: new Date(Date.now() - BEST_WINDOW_MS) },
+        item: { rarity: { in: [...FEED_RARITIES] } },
+      },
+      // By the price recorded at the moment of opening, not by today's price:
+      // that is what the player actually won, and it does not move under the
+      // card when the item is re-priced.
+      orderBy: { itemPrice: 'desc' },
+      include: { user: true, item: true, case: true },
+    });
+
+    const best: LiveDrop | null = opening
+      ? {
+          openingId: opening.id,
+          userId: opening.userId,
+          username: opening.user.username,
+          avatarUrl: opening.user.avatarUrl,
+          caseName: opening.case.name,
+          caseSlug: opening.case.slug,
+          itemName: opening.item.name,
+          itemImageUrl: opening.item.imageUrl,
+          rarity: opening.item.rarity as ItemRarity,
+          price: opening.itemPrice,
+          createdAt: opening.createdAt.toISOString(),
+        }
+      : null;
+
+    try {
+      await this.redis.set(BEST_KEY, best ? JSON.stringify(best) : '', 'EX', BEST_TTL_SEC);
+    } catch {
+      // A cache that refuses to store is a slower page, not a broken one.
+    }
+    return best;
+  }
+
   private async recentFromDatabase(limit: number): Promise<LiveDrop[]> {
     const openings = await this.read.caseOpening.findMany({
       where: { item: { rarity: { in: [...FEED_RARITIES] } } },
@@ -125,6 +202,7 @@ export class DropsService {
 
     return openings.map((o) => ({
       openingId: o.id,
+      userId: o.userId,
       username: o.user.username,
       avatarUrl: o.user.avatarUrl,
       caseName: o.case.name,

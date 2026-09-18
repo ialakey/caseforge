@@ -5,7 +5,14 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { type PublicUser, ErrorCode, UserRole, parseTradeUrl } from '@caseforge/shared';
+import {
+  type ItemRarity,
+  type PublicProfileView,
+  type PublicUser,
+  ErrorCode,
+  UserRole,
+  parseTradeUrl,
+} from '@caseforge/shared';
 import { generateServerSeed, hashServerSeed } from '@caseforge/shared/node';
 import { PrismaService } from '../common/prisma.service';
 import { loadConfig } from '../common/config';
@@ -123,6 +130,56 @@ export class UsersService {
       role: user.role as UserRole,
       balance: user.balance,
       tradeUrl: user.tradeUrl,
+    };
+  }
+
+  /**
+   * A player as a stranger sees them, or null when there is no such player.
+   *
+   * The `select` is written out in full rather than taking the row and picking
+   * fields off it afterwards: a balance that never leaves Postgres cannot be
+   * serialised into a public response by accident later.
+   *
+   * Drops are the same notable ones the live feed shows — a profile listing
+   * every Consumer-grade skin somebody ever unboxed is a wall, and the feed
+   * has already decided what counts as worth showing.
+   */
+  async getPublicProfile(userId: string): Promise<PublicProfileView | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, username: true, avatarUrl: true, steamId64: true, createdAt: true },
+    });
+    if (!user) return null;
+
+    const openings = await this.prisma.caseOpening.findMany({
+      where: {
+        userId,
+        item: { rarity: { in: ['RESTRICTED', 'CLASSIFIED', 'COVERT', 'EXTRAORDINARY'] } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 24,
+      include: { item: true, case: true },
+    });
+
+    return {
+      id: user.id,
+      username: user.username,
+      avatarUrl: user.avatarUrl,
+      steamId: user.steamId64,
+      createdAt: user.createdAt.toISOString(),
+      drops: openings.map((o) => ({
+        openingId: o.id,
+        userId: user.id,
+        username: user.username,
+        avatarUrl: user.avatarUrl,
+        caseName: o.case.name,
+        caseSlug: o.case.slug,
+        itemName: o.item.name,
+        itemImageUrl: o.item.imageUrl,
+        rarity: o.item.rarity as ItemRarity,
+        price: o.itemPrice,
+        createdAt: o.createdAt.toISOString(),
+      })),
     };
   }
 
