@@ -28,11 +28,19 @@ The stack and the architectural decisions are covered in
 
 
 <p align="center">
-  <img src="docs/screenshots/en/catalogue.png" alt="The case catalogue with the live drop feed above it" width="900">
+  <img src="docs/screenshots/en/bonus-teaser.png" alt="The landing page with the live drop strip above the header" width="900">
 </p>
 
 <p align="center">
-  <em>The catalogue and the live drop feed. Prices come from the Steam market; the language and currency switches sit in the header.</em>
+  <em>The live drop strip sits above the header on every page, with the best drop of the day pinned to its left. It is clipped rather than scrollable: a new drop pushes the oldest out of sight, so the whole of it is readable without a gesture.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/en/catalogue.png" alt="The case catalogue grouped into shelves" width="900">
+</p>
+
+<p align="center">
+  <em>Two hundred cases are a wall, so the catalogue is grouped into shelves with jump links above them. The moment somebody searches, the shelves are dropped and the matches shown flat.</em>
 </p>
 
 <p align="center">
@@ -41,6 +49,22 @@ The stack and the architectural decisions are covered in
 
 <p align="center">
   <em>Every case publishes its contents: rarity, current price and the exact chance of each item. The odds are the ticket ranges the server rolls against, not a marketing figure.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/en/case-free.png" alt="A free case with its top-up requirement and daily limit" width="900">
+</p>
+
+<p align="center">
+  <em>A free case costs nothing and is rationed instead by a top-up threshold and an opening limit over a rolling 24 hours. The terms are shown as progress with the player's own numbers against them, because "you need another $107" is an instruction where a greyed-out button is a dead end.</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/en/profile-public.png" alt="A player's public profile with their recent drops" width="900">
+</p>
+
+<p align="center">
+  <em>Every drop in the strip links to whoever won it. The public profile carries a name, an avatar, the month they joined and their recent drops — and nothing else: balances, top-ups and trade links are absent from it by construction rather than by filtering.</em>
 </p>
 
 ---
@@ -154,6 +178,19 @@ was charged on is refunded.
 Item prices drift, and a case assembled at 90% can wander off. Recovery is two
 clicks in the builder: **Fit price to RTP**, then **Solve the odds**, then save.
 
+For the whole catalogue at once there is a script, because a log line is an
+alert and not a repair:
+
+```bash
+pnpm --filter @caseforge/api rebalance-cases -- --dry-run   # report only
+pnpm --filter @caseforge/api rebalance-cases                # re-solve the drifted ones
+```
+
+It moves the odds and never the price, and reports rather than repricing a case
+it cannot solve at the current price — that is a decision about what the case
+is. Free cases are skipped: there is no return on a stake when nothing is
+staked.
+
 ---
 
 ## Language and currency
@@ -195,6 +232,18 @@ maintenance for an audience of a few people.
 - **Russian and English interface** with a language switch, and prices in
   roubles or dollars with a currency switch
 - **balance top-up** through a stub (demo mode, disabled by a flag)
+- **a catalogue grouped into shelves**: categories are data, not an enum, so a
+  shelf can be added for a holiday and removed afterwards without a deploy, and
+  a case carries a description in both locales under its title
+- **free cases**: they cost nothing and are rationed by a top-up threshold and
+  an opening limit over a rolling 24 hours instead of by a price, with the terms
+  shown to the player as progress rather than as a refusal
+- **a live drop strip above the header on every page**, with the best drop of the
+  last day pinned to it, and every card linking to the player who won it
+- **public player profiles**: a name, an avatar, the month they joined and their
+  recent drops, switchable off in one setting
+- **a catalogue importer**: a survey file of shelves, cases and item names
+  becomes a working catalogue — odds solved, art drawn and descriptions composed
 - **case builder in the CRM**: Steam market search, import with image, rarity
   and price, a case image, auto-solved odds for a target RTP, a live margin verdict
 - **prices and images from Steam**: hourly synchronisation, RTP recalculation for
@@ -540,6 +589,13 @@ Appearance cannot reach the odds: the ticket space, the RTP and the wheel live i
 their own groups, where a change is a change to the game rather than to its
 paint.
 
+Two of the groups are about what exists rather than what it looks like. **Drop
+feed** switches the strip above the header on or off and decides whether the
+best drop of the day is pinned beside it. **Player profiles** decides whether
+`/u/<id>` exists at all: with it off the API answers 404 and the cards in the
+strip stop being links, so the rule is enforced on the server rather than by
+hiding a link in the browser.
+
 ---
 
 ## Analytics
@@ -620,6 +676,14 @@ How a case is assembled:
 4. **Save** — the server independently recomputes the RTP from database prices
    and refuses the case if the return exceeds 98% or the ranges do not tile the
    ticket space.
+
+Alongside the loot table the builder carries the case's **shelf**, its
+**description** in both locales, and — behind one checkbox — the **free case**
+terms: the minimum top-up over the last 24 hours and how many openings are
+allowed in that window. Marking a case free sets its price to zero and takes
+the RTP and margin readouts off the page, because there is no return on a stake
+when nothing is staked. The pair is checked at the edge: a free case priced
+above zero and a paid case priced at nothing are both refused.
 
 The balancing model: an item's weight is inversely proportional to its price
 raised to `k`, and `k` is found by binary search against the target RTP. The

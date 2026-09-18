@@ -83,7 +83,13 @@ The key entities (full schema in `apps/api/prisma/schema.prisma`):
 
 - **User** — keyed by `steamId64`, holds the balance, role and ban status
 - **Item** — the CS2 item catalogue: `marketHashName`, rarity, type, price
-- **Case** — a case: price, image, active flag, base name and optional English name
+- **CaseCategory** — a shelf in the catalogue ("free cases", "by rarity",
+  "collections"). Data rather than an enum, because grouping is merchandising:
+  an operator adds a shelf for a holiday and removes it afterwards, and neither
+  should be a deploy
+- **Case** — a case: price, image, active flag, base and optional English name,
+  a description in both locales, the shelf it sits on, and — for a free case —
+  the top-up threshold and the opening limit that ration it in place of a price
 - **CaseItem** — an item inside a case with its **ticket range** (`rangeFrom`..`rangeTo`)
 - **CaseOpening** — a recorded opening: seed pair, nonce, roll, item dropped
 - **InventoryItem** — an item on a user's account, with a state machine
@@ -193,6 +199,23 @@ a knife's price jumps. Therefore:
 - an hourly job pulls prices from the Steam market for items in active cases,
 - after every re-pricing the RTP of all active cases is recomputed,
 - leaving the corridor is logged as a warning; exceeding 98% as an error.
+
+A log line is an alert, not a repair, and drift is silent until somebody reads
+it. `pnpm --filter @caseforge/api rebalance-cases` is the repair: it recomputes
+every case's RTP from today's prices and re-solves the ones that have left the
+corridor. It moves the odds and never the price — a price is an operator's
+decision that a player may have seen yesterday, while the odds are a derived
+quantity that was already wrong. A case it cannot solve at the current price is
+reported rather than repriced, because that is a decision about what the case
+is. It saves through the same admin path the CRM uses, so ranges are re-checked,
+the audit entry is written and the catalogue cache is dropped.
+
+**Free cases are exempt from all of this.** RTP is what comes back per unit
+staked, and nothing is staked — the ratio is a division by zero. A free case is
+rationed by a top-up threshold and an opening limit over a rolling 24 hours
+instead, both checked when it is opened rather than when it is saved, and it
+carries no cached RTP at all rather than a zero that would read as a case that
+pays nothing.
 
 **Unconfirmed prices** are tracked separately: an item whose price Steam never
 returned carries an invented number yet counts towards the RTP like any other.
