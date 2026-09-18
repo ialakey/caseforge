@@ -1169,12 +1169,45 @@ fields already exist on `User`).
   provable fairness, case opening with animation and batch opening, upgrades,
   contracts, inventory, drop feed, RU/EN localisation with a currency switch, a
   CRM with a case builder and Steam price synchronisation.
-- **Stage 2 (done, bar item deposits).** The bot farm, real withdrawals through
-  market.csgo.com and through bots of our own.
+- **Stage 2 (done).** The bot farm, real withdrawals through market.csgo.com and
+  through bots of our own, and deposits of skins the same way round.
 - **Stage 3 (done).** Case battles, promo codes, a referral system.
-- **Stage 4.** Payments, KYC, full CRM reporting.
+- **Stage 4 (done, with three named limits).** Payments behind a provider port,
+  operator-reviewed identity checks, CRM reports and exports. What it does not
+  include is worth stating rather than leaving to be discovered:
+  - no live payment provider — the port ships with a signed demo adapter, and a
+    real one is an adapter plus a merchant account, not a redesign;
+  - no third-party identity verification — a provider is a contract, a
+    data-processing agreement and a per-check fee, which a codebase does not
+    decide on its own;
+  - no encryption at rest for identity documents and no retention schedule —
+    both properties of the volume and the jurisdiction.
 - **Stage 5 (done).** Load testing, PgBouncer, a read replica, caching and
   health checks — section 10.
 
 Outside the roadmap, because they turned out to be needed before stage 4: the
-appearance builder (section 11d) and the analytics contour (section 11e).
+appearance builder (section 11d) and the analytics contour (section 11e). Added
+later for the same reason: catalogue shelves with per-case descriptions, free
+cases rationed by a top-up threshold, the drop strip above the header, public
+player profiles, and a catalogue importer that turns a survey file into a
+working catalogue.
+
+### What is left
+
+Nothing on the roadmap. What remains is a short list of things the roadmap
+never covered, none of which blocks running the site:
+
+- **No admin page for the catalogue shelves.** They are created by the importer
+  and by the API, and a case can be moved between them in the case builder, but
+  renaming or reordering a shelf has no interface. The translations for that
+  page already exist, which is the tell.
+- **Item names are stored in one language.** `Item.name` holds whatever the
+  import that created the row was reading — English for the demo catalogue,
+  Russian for everything the survey importer brought in. The case grid shows
+  `market_hash_name` and is unaffected; the inventory is where the mix shows.
+- **`weaponType` is null for anything imported in Russian.** The field is
+  written and nothing reads it, so this costs nothing today and would need
+  fixing before anything does.
+- **Thirteen cases sit below the working corridor.** Not a loss — they are too
+  stingy rather than unprofitable — and `rebalance-cases` fixes them in one
+  run. Left alone because raising a case's payout is an operator's decision.

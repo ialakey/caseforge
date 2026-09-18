@@ -285,12 +285,19 @@ export class ItemSyncService {
         }
       }
 
+      // A free case has no RTP to recompute. It is the return per unit staked
+      // and nothing is staked, so the ratio would be a division by zero —
+      // which this loop used to paper over by storing 0, quietly replacing the
+      // deliberate null and then warning, every hour, that a case returning
+      // "0%" sells poorly. Nothing to store, and nothing to judge.
+      if (gameCase.isFree) continue;
+
       const expected = gameCase.items.reduce((sum, ci) => {
         const price = ci.item.priceOverride ?? ci.item.marketPrice;
         const chance = (ci.rangeTo - ci.rangeFrom + 1) / 1_000_000;
         return sum + chance * price;
       }, 0);
-      const rtp = gameCase.price > 0 ? expected / gameCase.price : 0;
+      const rtp = expected / gameCase.price;
 
       await this.prisma.case.update({
         where: { id: gameCase.id },
