@@ -105,6 +105,7 @@ re-running the seed silently overwrote fixes made in the CRM.
 pnpm test          # unit tests: provable fairness, ticket ranges, balancing, upgrade odds
 pnpm typecheck     # every package
 pnpm test:smoke    # end-to-end run against a live API
+pnpm test:smoke:battles   # battles and referrals, same requirements
 ```
 
 `test:smoke` needs the infrastructure up and the API running. It covers what
@@ -113,6 +114,13 @@ seed never leaks, that an opening recomputes after rotation, that the balance
 agrees with the ledger, that roles keep the admin panel closed, that every item
 in an active case has an image and a Steam-confirmed price, and that the server
 refuses a loss-making case and a case with a gap in its ticket ranges.
+
+`test:smoke:battles` is the same kind of pass over case battles and referrals: it
+plays a real battle between two throwaway accounts and re-derives every roll in
+it from the seed pair on record, checks that the items all end up with the
+winner, that a cancelled battle refunds every seat, and that a referral
+commission accrues once, pays out once and takes itself back when the seat it
+was charged on is refunded.
 
 ### If a case turns red on RTP
 
@@ -172,6 +180,11 @@ maintenance for an audience of a few people.
   from the price ratio
 - **contracts**: trade 3 to 10 items for one, over a reward table solved so the
   expected payout is the same 90% the cases run on
+- **case battles**: two to four players open the same list of cases and one of
+  them takes every item, with each drop still an ordinary, individually
+  verifiable opening, and an unfilled battle refunded in full
+- **referrals**: an invite link per player, commission on what the people they
+  invited top up and spend, accrued on its own and paid out on request
 - **a daily bonus wheel**: one spin a day for money, a discount, a free opening
   or a skin, rolled from the same seed pair as everything else
 - **promo codes on a top-up**: percentage or flat, with per-code and per-player
@@ -201,8 +214,9 @@ maintenance for an audience of a few people.
 
 ## What is not there yet
 
-Stage 1 of the roadmap (section 14 of the architecture document). Not
-implemented: payments, item deposits, case battles, KYC.
+Stages 1 to 3 of the roadmap (section 14 of the architecture document), bar item
+deposits. Not implemented: real payments, depositing items from Steam, KYC and
+the full CRM reporting of stage 4.
 
 ---
 
@@ -364,6 +378,34 @@ so a reward never disappears without explanation.
 
 ---
 
+## Case battles
+
+`/battles`. Line up a list of cases, pick two to four seats, and everybody opens
+that same list at once. One of them keeps every item that dropped: in the
+standard mode the biggest total, in the crazy mode the smallest.
+
+Each seat pays the full list price, so a battle does not change the site's
+margin — the pot moves between the players, and the expected return is the
+weighted RTP of the cases in it.
+
+**Every drop in a battle is an ordinary case opening.** The roll comes from the
+opening player's own seed pair and their own nonce, so each player verifies their
+own drops in their profile with the same arithmetic as a solo opening; a battle
+adds a comparison at the end, not a second source of randomness. The items are
+created in the winner's inventory while still pointing at the opening that rolled
+them, so the record keeps both who rolled an item and who owns it.
+
+The last seat to be taken plays the whole battle out in one transaction, and the
+reels then play it back round by round. A tie is decided by the single best drop
+— the worst one in the crazy mode — and then by the earlier seat: both are
+functions of rolls already on the record.
+
+A battle nobody joins is cancelled by a sweeper after a configurable wait and
+every seat is refunded in full through the ledger, so the worst case for a host
+is a wait rather than a loss.
+
+---
+
 ## Promo codes
 
 Created in the back office at `/admin/promo`. A code is a percentage of the
@@ -393,13 +435,36 @@ together both see the last use available and both take it.
 
 ---
 
+## Referrals
+
+`/referral`. Every player has an invite code and a link that carries it. Somebody
+following that link is bound to the inviter when they sign in, and a share of
+what they then spend is credited to the inviter: a percentage of their top-ups
+and a percentage of what they pay to open cases, a battle seat included. Both
+rates, and the smallest payout, are runtime settings.
+
+Commission accrues into its own rows and lands on the balance only when the
+inviter claims it, as a single ledger entry. That keeps the ledger proportional
+to the number of payouts rather than to the number of drops — and it is why the
+referral page shows "accrued" and "paid out" as two different numbers.
+
+An invite binds once and only to an account with no history on it: a player who
+has already opened a case or moved money is not somebody's fresh recruit. A
+player cannot use their own code, and a sign-up from the inviter's own address is
+flagged for an operator rather than refused, because a household shares an
+address. A refunded battle seat takes its commission back with it.
+
+---
+
 ## Runtime settings
 
 `/admin/settings`. Maintenance mode, the top-up bounds, the sell-back fee, the
-opening rate limit, the wheel's cooldown and slices, and the whole withdrawal
-policy — which channel delivers, how far above the credited price a purchase may
-go, the minimum seller delivery rate — are stored in the database and read at
-request time, so changing one is a save rather than a deploy.
+opening rate limit, the wheel's cooldown and slices, the battle limits and how
+long an unfilled one waits, both referral commission rates and the smallest
+payout, and the whole withdrawal policy — which channel delivers, how far above
+the credited price a purchase may go, the minimum seller delivery rate — are
+stored in the database and read at request time, so changing one is a save
+rather than a deploy.
 
 <p align="center">
   <img src="docs/screenshots/en/admin-settings.png" alt="The settings page of the back office, grouped by area" width="900">
@@ -557,7 +622,9 @@ apps/
     src/upgrade/             upgrade: odds, roll, stake consumption
     src/contracts/           contracts: solved outcome table, roll, reward
     src/bonus/               the daily wheel: cooldown, roll, vouchers
+    src/battles/             case battles: seats, settlement, the refund sweeper
     src/promo/               promo codes: rules, preview, redemption
+    src/referral/            referrals: binding, commission, payout
     src/inventory/           inventory: filters, selling
     src/drops/               batched WebSocket feed
     src/withdrawals/         withdrawal requests and queueing
@@ -566,6 +633,7 @@ apps/
     src/steam/               OpenID, the Steam market, price and image sync
     src/common/              config, Prisma, Redis, FX rates, roles, nightly reconciliation
     test/smoke.mjs           end-to-end run against a live API
+    test/battle-smoke.mjs    battles and referrals against a live API
   bot/
     src/market-pool.ts       the market accounts: throttling, balances, whose turn it is
     src/market-processor.ts  buying on market.csgo.com and settling a request
@@ -577,7 +645,7 @@ apps/
     scripts/add-bot.ts       bot registration
     scripts/add-market-account.ts  market key registration
   web/
-    src/app/                 home, case, upgrade, contract, bonus, profile, CRM, Steam callback
+    src/app/                 home, case, battles, upgrade, contract, bonus, referral, profile, CRM
     src/app/admin/cases/     case list and builder
     src/components/          drop feed, opening reel, cards, switches
     src/lib/                 API client, auth store, settings store, socket
@@ -591,7 +659,9 @@ packages/
     src/upgrade.ts           upgrade odds and bounds
     src/contract.ts          contract reward table: the tilt and its solver
     src/bonus.ts             the wheel: slices, ticket ranges, cooldown
+    src/battle.ts            battle limits, entry price, standings and tiebreaks
     src/promo.ts             promo code rules and what one is worth
+    src/referral.ts          invite codes, commission and the binding rules
     src/settings.ts          the settings registry: types, bounds, defaults
     src/inventory.ts         inventory statuses, filters and price bands
     src/steam-market.ts      market response parsing: prices, rarity, images

@@ -91,7 +91,12 @@ The key entities (full schema in `apps/api/prisma/schema.prisma`):
 - **Upgrade** — a staked upgrade: stake, target, chance, roll, outcome
 - **Contract** — several items traded for one: stake, solved outcome table, roll, reward
 - **DailyBonus** — one spin of the wheel: slice, roll, and whether it is still unspent
+- **Battle / BattleCase / BattlePlayer** — a case battle: the agreement, its case
+  list with frozen prices, and its seats. What actually dropped lives in the
+  `CaseOpening` rows that point back at the battle
 - **PromoCode / PromoRedemption** — a top-up promotion and each use of it
+- **Referral** — who invited whom, written once and never re-pointed
+- **ReferralEarning** — one commission accrual, off the ledger until it is claimed
 - **Setting** — a runtime setting, keyed by the shared registry
 - **Withdrawal** — a withdrawal request, carrying the channel that fills it
 - **WithdrawalItem** — one line of a request: what it asked for, recorded once
@@ -333,6 +338,95 @@ the candidate list is ordered by id, which is stable in a way that ordering by a
 drifting price is not. If the catalogue holds nothing inside the ceiling the
 slice is honoured in money instead: paying nothing at all is the one outcome the
 wheel must never have.
+
+---
+
+## 6c. Case battles
+
+Several players buy the same list of cases and open it side by side; one of them
+keeps every item that dropped. In the standard mode that is the biggest total, in
+the crazy mode the smallest — the same cases, the opposite goal.
+
+Everybody pays the full list price of the list. Nobody is charged less for
+playing against somebody else, which means the site's margin is exactly what it
+would have been had the same cases been opened solo: the expected return is the
+weighted RTP of the cases in the battle, and the pot only moves *between* the
+players. A battle is a redistribution, not a second economy.
+
+### Where the randomness comes from
+
+Nowhere new. Every drop in a battle is an ordinary `CaseOpening` row, rolled from
+the opening player's own seed pair over their own `nonce` block, exactly as a
+solo opening is. The rows carry `battleId` and `battleRound` and nothing else
+that a solo opening does not have.
+
+A battle-wide seed was the obvious alternative and is the wrong trade. The site
+already publishes a commitment per player and reveals it on rotation; a second
+scheme alongside it would be a second thing to get wrong, and it would not buy
+anything a player cannot already do — each of them verifies their own drops in
+their own profile, with the same arithmetic as any other drop, and the totals
+are then addition over numbers that are already on the record.
+
+It also means battles need no special case anywhere else: the RTP report, the
+per-case margin, the live drop feed and the player's own opening history all pick
+them up without knowing that battles exist.
+
+### Seats
+
+A seat is claimed with a conditional `UPDATE` on a denormalised counter:
+
+```sql
+UPDATE battles SET "filledSlots" = "filledSlots" + 1
+WHERE id = $1 AND status = 'WAITING' AND "filledSlots" < slots
+RETURNING "filledSlots"
+```
+
+`RETURNING` hands back the player's own 1-based seat number, and no rows means
+somebody else took the last seat. Counting the seats and then inserting one lets
+two players fired together both see the same seat free. The debit that pays for
+it is the same conditional `UPDATE` an opening uses, in the same transaction, so
+a battle that fills up while a player is joining rolls their debit back rather
+than refunding it afterwards.
+
+### Settlement
+
+Filling the last seat plays the battle out inside that same transaction. Four
+seats over thirty rounds is a hundred and twenty openings, a hundred and twenty
+inventory rows and a seed reservation per player — the largest write the site
+makes, and the reason its timeout is raised. It is not splittable: a battle that
+could pay some players and not others has no meaning.
+
+The ids of the openings and of the inventory items are generated up front so each
+side goes in with one `createMany` rather than a round trip per row while the
+transaction holds locks. Seeds are reserved in a fixed order across players,
+because two battles filling at the same instant can share a player and a
+consistent order is what keeps their transactions from taking each other's locks
+the wrong way round.
+
+Every item is then created **in the winner's inventory while still pointing at the
+opening that rolled it**. The opening's `userId` stays whoever rolled it, and
+that gap between roller and owner is precisely what a battle is; recording only
+one of the two would lose either the provenance or the ownership.
+
+### Ties
+
+Two seats opening the same cases can land on the same total, and with cheap cases
+it happens often enough to need a rule. The rule is sudden death on the single
+best drop — the single worst in the crazy mode — and, if even that matches, the
+earlier seat wins. Both steps are functions of drops already on the record, so
+the outcome stays reproducible from the stored rolls; a fresh random draw would
+not be.
+
+### Battles that never fill
+
+A battle waiting for a second player holds the host's money, and the host may
+well have closed the tab. A sweeper cancels anything that has waited longer than
+the configured window and refunds every seat in full, through the ledger. The
+transition is claimed with a conditional `UPDATE` from `WAITING`, which is what
+stops a refund racing a settlement — a battle that filled a moment ago is being
+played, and the sweeper must not be able to give its entries back underneath it.
+Switching battles off in the settings makes the same sweeper clear the lobby
+outright, which is what flipping that switch during an incident is asking for.
 
 ---
 
@@ -611,7 +705,13 @@ openings, and script protection has to see it that way.
 Channels:
 - `drops:live` — the global drop feed (rare items only, otherwise it is a flood at peak)
 - `user:{id}` — personal: balance, withdrawal status, inventory
-- `battle:{id}` — case battle state
+- `battles:events` — battle changes, fanned out to everybody
+
+Battle events are deliberately *not* batched and *not* per-battle rooms. They are
+rare — a creation, a seat, a settlement — and the lobby is one shared view, so a
+seat has to leave every other browser at once; three hundred milliseconds of
+buffering would only make a taken seat look free. A battle page filters the
+broadcast by id and re-reads the battle when it hears about its own.
 
 At peak the drop feed is the hottest channel. It is aggregated: events collect in a
 buffer and are broadcast in batches roughly every 300 ms rather than one by one.
@@ -723,6 +823,60 @@ asking why their balance moved deserves a row that still explains it.
 
 ---
 
+## 11c. Referrals
+
+A player hands out a link, whoever follows it is bound to them on sign-up, and a
+share of what that person then spends is credited to the inviter.
+
+### Binding
+
+The invite arrives as `?ref=CODE` on any page and the visitor is not signed in
+yet — they are about to be sent to Steam and back, which discards everything the
+page was holding. So the code is parked in the browser and redeemed by a call
+that lands moments after sign-in.
+
+That leaves the endpoint open at any later point, which is why the rule that
+protects it is not timing but history: a code is refused once the account has any
+activity on it. A player who has already opened a case or moved money is not
+somebody's fresh recruit, and without that rule an established account could be
+attributed to whoever asked last. On top of it, a player cannot use their own
+code, and a sign-up from the inviter's own address is flagged on the binding —
+not refused, because households and mobile carriers share addresses, but left
+where an operator can see it.
+
+One inviter per player, enforced by a unique `refereeId` rather than by a check:
+two claims fired together both pass a check, and only the constraint decides.
+
+### Accrual, and why it is not the ledger
+
+Commission accrues into `ReferralEarning` rows that are not on any balance and
+not in the ledger until they are claimed. A commission credited as it is earned
+would be a `Transaction` row per opening per inviter, and the ledger is what the
+nightly reconciliation walks; accruing into rows of their own and paying out in
+one entry keeps the ledger proportional to the number of payouts rather than to
+the number of drops.
+
+The rate is stored on each row. It is a setting, and an operator lowering it must
+not rewrite what was already earned.
+
+A refunded battle seat takes its accrual back with it, or creating and cancelling
+battles would be a free way to pay an inviter. Only pending rows are removed: an
+accrual that has already been paid out is money on somebody's balance, and
+clawing that back would be a debit they never agreed to.
+
+### Payout
+
+The pending rows are claimed with an `UPDATE ... RETURNING` and the floor is
+checked against what came back, not against a `SUM` read beforehand. The other
+order pays out a different number from the one it checked whenever an accrual
+lands in between — and for an inviter with active recruits, that is the normal
+case. A refusal throws, which rolls the claim back and leaves the pot as it was.
+
+The payout itself is a single `REFERRAL` ledger entry: it is the one point at
+which accrued commission becomes money.
+
+---
+
 ## 12. Money coming in: top-ups
 
 Today the "Top up" button is backed by a stub — the server credits the entered
@@ -753,6 +907,8 @@ stays correct and a deposit shows up as a deposit in reports.
 - withdrawal limits: daily, plus a rule for the first withdrawal after a first deposit
 - chargeback risk: hold withdrawals until a deposit has "settled"
 - checking Steam account age and profile level — filters out throwaway accounts
+- referral self-dealing: an invite binds only to an account with no history, a player
+  cannot use their own code, and a sign-up from the inviter's address is flagged
 - every incoming amount is validated server-side; the client never sends a price, only an id
 - secrets only in the environment or a secret manager; the repository holds `.env.example`
 
@@ -771,7 +927,8 @@ fields already exist on `User`).
   provable fairness, case opening with animation and batch opening, upgrades,
   contracts, inventory, drop feed, RU/EN localisation with a currency switch, a
   CRM with a case builder and Steam price synchronisation.
-- **Stage 2.** The bot farm, real withdrawals, item deposits.
-- **Stage 3.** Case battles, promo codes, a referral system.
+- **Stage 2 (done, bar item deposits).** The bot farm, real withdrawals through
+  market.csgo.com and through bots of our own.
+- **Stage 3 (done).** Case battles, promo codes, a referral system.
 - **Stage 4.** Payments, KYC, full CRM reporting.
 - **Stage 5.** Load testing, PgBouncer, replicas, tuning for the spike.
