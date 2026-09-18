@@ -32,10 +32,20 @@ interface BuilderItem {
   rangeTo: number;
 }
 
+/** A shelf as the panel lists it. */
+interface CategoryRow {
+  slug: string;
+  name: string;
+  nameEn: string | null;
+}
+
 interface LoadedCase {
   slug: string;
   name: string;
   nameEn: string | null;
+  categorySlug: string | null;
+  description: string | null;
+  descriptionEn: string | null;
   price: number;
   imageUrl: string | null;
   isActive: boolean;
@@ -70,6 +80,10 @@ export default function CaseBuilderPage() {
   const [sortOrder, setSortOrder] = useState(0);
   const [imageUrl, setImageUrl] = useState('');
   const [nameEn, setNameEn] = useState('');
+  const [description, setDescription] = useState('');
+  const [descriptionEn, setDescriptionEn] = useState('');
+  const [categorySlug, setCategorySlug] = useState('');
+  const [categories, setCategories] = useState<CategoryRow[]>([]);
   const [items, setItems] = useState<BuilderItem[]>([]);
 
   const [targetRtp, setTargetRtp] = useState(DEFAULT_TARGET_RTP);
@@ -94,11 +108,23 @@ export default function CaseBuilderPage() {
         setIsActive(data.isActive);
         setSortOrder(data.sortOrder);
         setImageUrl(data.imageUrl ?? '');
+        setDescription(data.description ?? '');
+        setDescriptionEn(data.descriptionEn ?? '');
+        setCategorySlug(data.categorySlug ?? '');
         setItems(data.items);
         setLoaded(true);
       })
       .catch(() => setError(t('admin.case.loadFailed')));
   }, [user, isNew, params.slug]);
+
+  // The shelves are loaded for a new case too, which is the one place a case
+  // most needs a shelf — a case created without one lands in "ungrouped".
+  useEffect(() => {
+    if (!user) return;
+    void api<CategoryRow[]>('/api/admin/categories')
+      .then(setCategories)
+      .catch(() => setCategories([]));
+  }, [user]);
 
   const priceMinor = Math.round(Number.parseFloat(priceMajor.replace(',', '.')) * 100) || 0;
 
@@ -260,6 +286,11 @@ export default function CaseBuilderPage() {
           slug,
           name,
           nameEn: nameEn.trim() === '' ? null : nameEn.trim(),
+          // '' is the "ungrouped" choice and has to travel as null, not as an
+          // empty slug the API would look up and fail to find.
+          categorySlug: categorySlug === '' ? null : categorySlug,
+          description: description.trim() === '' ? null : description.trim(),
+          descriptionEn: descriptionEn.trim() === '' ? null : descriptionEn.trim(),
           price: priceMinor,
           imageUrl: imageUrl.trim() === '' ? null : imageUrl.trim(),
           isActive,
@@ -331,6 +362,21 @@ export default function CaseBuilderPage() {
           />
         </label>
         <label className="text-sm">
+          <span className="mb-1 block text-neutral-500">{t('admin.case.category')}</span>
+          <select
+            value={categorySlug}
+            onChange={(e) => setCategorySlug(e.target.value)}
+            className="w-full rounded bg-neutral-800 px-2 py-1.5"
+          >
+            <option value="">{t('admin.case.noCategory')}</option>
+            {categories.map((c) => (
+              <option key={c.slug} value={c.slug}>
+                {locale === 'en' ? (c.nameEn?.trim() || c.name) : c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm">
           <span className="mb-1 block text-neutral-500">{t('admin.case.price')}</span>
           <input
             value={priceMajor}
@@ -356,6 +402,33 @@ export default function CaseBuilderPage() {
               value={sortOrder}
               onChange={(e) => setSortOrder(Number(e.target.value) || 0)}
               className="w-20 rounded bg-neutral-800 px-2 py-1.5"
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+        <h2 className="font-medium">{t('admin.case.descriptionTitle')}</h2>
+        <p className="text-sm text-neutral-500">{t('admin.case.descriptionHint')}</p>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="text-sm">
+            <span className="mb-1 block text-neutral-500">{t('admin.case.descriptionRu')}</span>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              maxLength={600}
+              className="w-full rounded bg-neutral-800 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm">
+            <span className="mb-1 block text-neutral-500">{t('admin.case.descriptionEn')}</span>
+            <textarea
+              value={descriptionEn}
+              onChange={(e) => setDescriptionEn(e.target.value)}
+              rows={3}
+              maxLength={600}
+              className="w-full rounded bg-neutral-800 px-2 py-1.5"
             />
           </label>
         </div>

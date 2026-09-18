@@ -23,6 +23,12 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
   const { locale, t } = useSettings();
   const money = useMoneyFormatter();
   const title = localizedName(locale, gameCase);
+  // Same per-row fallback as the title: an untranslated description reads
+  // better in the base locale than not at all.
+  const description =
+    locale === 'en'
+      ? (gameCase.descriptionEn?.trim() ?? '') || gameCase.description
+      : gameCase.description;
   const [count, setCount] = useState(1);
   const [batch, setBatch] = useState<OpenCaseBatchResult | null>(null);
   const [spinId, setSpinId] = useState(0);
@@ -83,12 +89,21 @@ export function CaseOpener({ gameCase }: { gameCase: CaseView }) {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center gap-4">
-        {gameCase.imageUrl && (
-          <img src={gameCase.imageUrl} alt={title} className="h-16 w-20 object-contain" />
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-4">
+          {gameCase.imageUrl && (
+            <img src={gameCase.imageUrl} alt={title} className="h-16 w-20 object-contain" />
+          )}
+          <h1 className="text-2xl font-semibold">{title}</h1>
+          <Money value={gameCase.price} className="text-lg text-accent" />
+        </div>
+
+        {/* Omitted entirely when absent: a case imported before descriptions
+            existed should look like a case without a paragraph, not like one
+            with an empty slot where a paragraph failed to load. */}
+        {description && (
+          <p className="max-w-3xl text-sm leading-relaxed text-ink-muted">{description}</p>
         )}
-        <h1 className="text-2xl font-semibold">{title}</h1>
-        <Money value={gameCase.price} className="text-lg text-accent" />
       </div>
 
       <div className="rounded-xl border border-edge-subtle bg-surface-raised/70 p-4 md:p-6">
