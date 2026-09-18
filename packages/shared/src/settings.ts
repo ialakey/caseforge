@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_THEME, hexColorSchema } from './appearance.ts';
 import { BATTLE_MAX_PLAYERS, BATTLE_MAX_ROUNDS, BATTLE_MIN_PLAYERS } from './battle.ts';
 import { WHEEL_SEGMENTS, wheelSegmentsSchema } from './bonus.ts';
 import { WITHDRAWAL_PROVIDERS } from './market.ts';
@@ -20,6 +21,7 @@ import { WITHDRAWAL_PROVIDERS } from './market.ts';
 
 export const SETTING_GROUPS = [
   'site',
+  'appearance',
   'deposits',
   'economy',
   'limits',
@@ -30,8 +32,15 @@ export const SETTING_GROUPS = [
 ] as const;
 export type SettingGroup = (typeof SETTING_GROUPS)[number];
 
-/** How the admin panel should render the field. */
-export type SettingKind = 'boolean' | 'int' | 'money' | 'json' | 'enum';
+/**
+ * How the admin panel should render the field.
+ *
+ * The kind is presentation, not validation — the schema decides what may be
+ * stored. They are separate because a colour and a nickname are both strings to
+ * zod and nothing alike to the person filling them in.
+ */
+export type SettingKind =
+  'boolean' | 'int' | 'money' | 'json' | 'enum' | 'string' | 'text' | 'color' | 'url';
 
 export interface SettingDef {
   group: SettingGroup;
@@ -47,6 +56,26 @@ export interface SettingDef {
 
 const bounded = (min: number, max: number) => z.coerce.number().int().min(min).max(max);
 
+const line = (max = 120) => z.string().trim().max(max);
+
+/**
+ * A link, or nothing at all.
+ *
+ * Empty is a real value here — it means "no logo", "no Telegram" — so it is
+ * accepted explicitly rather than by making the setting optional. A relative
+ * path is allowed because an image served by the site itself is the normal
+ * case, and `z.string().url()` would refuse it.
+ */
+const optionalLink = (max = 500) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .refine(
+      (value) => value === '' || value.startsWith('/') || /^https?:\/\//.test(value),
+      'must be empty, an absolute path, or an http(s) URL',
+    );
+
 export const SETTINGS = {
   'site.maintenance': {
     group: 'site',
@@ -55,6 +84,304 @@ export const SETTINGS = {
     default: false,
     label: 'Maintenance mode',
     hint: 'Turns off opening, upgrades, contracts and the wheel. Sign-in keeps working.',
+  },
+
+  // --- appearance: the site builder ----------------------------------------
+  //
+  // Every text here is optional in the sense that matters: empty falls back to
+  // the translated default in the dictionary, so a site nobody has configured
+  // looks exactly as it ships — in both languages.
+
+  'appearance.siteName': {
+    group: 'appearance',
+    kind: 'string',
+    schema: line(40),
+    default: 'CaseForge',
+    label: 'Site name',
+    hint: 'The wordmark in the header and the browser tab title.',
+  },
+  'appearance.taglineRu': {
+    group: 'appearance',
+    kind: 'string',
+    schema: line(160),
+    default: '',
+    label: 'Tagline, Russian',
+  },
+  'appearance.taglineEn': {
+    group: 'appearance',
+    kind: 'string',
+    schema: line(160),
+    default: '',
+    label: 'Tagline, English',
+  },
+  'appearance.logoUrl': {
+    group: 'appearance',
+    kind: 'url',
+    schema: optionalLink(),
+    default: '',
+    label: 'Logo image',
+    hint: 'Replaces the wordmark. Empty keeps the site name as text, which scales better.',
+  },
+
+  'appearance.accent': {
+    group: 'appearance',
+    kind: 'color',
+    schema: hexColorSchema,
+    default: DEFAULT_THEME.accent,
+    label: 'Accent',
+    hint: 'The money colour: balances, prices, the primary button.',
+  },
+  'appearance.accentStrong': {
+    group: 'appearance',
+    kind: 'color',
+    schema: hexColorSchema,
+    default: DEFAULT_THEME.accentStrong,
+    label: 'Accent, darker',
+    hint: 'The bottom of the primary button gradient.',
+  },
+  'appearance.positive': {
+    group: 'appearance',
+    kind: 'color',
+    schema: hexColorSchema,
+    default: DEFAULT_THEME.positive,
+    label: 'Positive',
+  },
+  'appearance.negative': {
+    group: 'appearance',
+    kind: 'color',
+    schema: hexColorSchema,
+    default: DEFAULT_THEME.negative,
+    label: 'Negative',
+  },
+  'appearance.surfaceBase': {
+    group: 'appearance',
+    kind: 'color',
+    schema: hexColorSchema,
+    default: DEFAULT_THEME.surfaceBase,
+    label: 'Background',
+  },
+  'appearance.surfaceRaised': {
+    group: 'appearance',
+    kind: 'color',
+    schema: hexColorSchema,
+    default: DEFAULT_THEME.surfaceRaised,
+    label: 'Panels',
+  },
+  'appearance.surfaceOverlay': {
+    group: 'appearance',
+    kind: 'color',
+    schema: hexColorSchema,
+    default: DEFAULT_THEME.surfaceOverlay,
+    label: 'Controls',
+    hint: 'Chips, inputs, hover states and the borders are all derived from this one.',
+  },
+  'appearance.textPrimary': {
+    group: 'appearance',
+    kind: 'color',
+    schema: hexColorSchema,
+    default: DEFAULT_THEME.textPrimary,
+    label: 'Text',
+    hint: 'The muted and faint tones keep its hue and drop its lightness.',
+  },
+  'appearance.radiusPx': {
+    group: 'appearance',
+    kind: 'int',
+    schema: bounded(0, 28),
+    default: DEFAULT_THEME.radiusPx,
+    label: 'Corner radius, px',
+  },
+  'appearance.glow': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: DEFAULT_THEME.glow,
+    label: 'Glow effects',
+    hint: 'The halo under the primary button and around a landed reel. Off is flatter and calmer.',
+  },
+
+  'appearance.heroEnabled': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Show the banner',
+  },
+  'appearance.heroTitleRu': {
+    group: 'appearance',
+    kind: 'string',
+    schema: line(120),
+    default: '',
+    label: 'Banner headline, Russian',
+  },
+  'appearance.heroTitleEn': {
+    group: 'appearance',
+    kind: 'string',
+    schema: line(120),
+    default: '',
+    label: 'Banner headline, English',
+  },
+  'appearance.heroSubtitleRu': {
+    group: 'appearance',
+    kind: 'text',
+    schema: line(400),
+    default: '',
+    label: 'Banner text, Russian',
+  },
+  'appearance.heroSubtitleEn': {
+    group: 'appearance',
+    kind: 'text',
+    schema: line(400),
+    default: '',
+    label: 'Banner text, English',
+  },
+  'appearance.heroCtaRu': {
+    group: 'appearance',
+    kind: 'string',
+    schema: line(40),
+    default: '',
+    label: 'Banner button, Russian',
+  },
+  'appearance.heroCtaEn': {
+    group: 'appearance',
+    kind: 'string',
+    schema: line(40),
+    default: '',
+    label: 'Banner button, English',
+  },
+  'appearance.heroCtaHref': {
+    group: 'appearance',
+    kind: 'string',
+    schema: line(200),
+    default: '#cases',
+    label: 'Banner button target',
+    hint: 'An anchor such as #cases, a path such as /battles, or a full URL.',
+  },
+  'appearance.heroImageUrl': {
+    group: 'appearance',
+    kind: 'url',
+    schema: optionalLink(),
+    default: '',
+    label: 'Banner image',
+    hint: 'Sits behind the headline. Empty keeps the gradient wash.',
+  },
+
+  'appearance.navBattles': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Navigation: battles',
+    hint: 'Hides the entry only. The feature itself is switched off in its own group.',
+  },
+  'appearance.navUpgrade': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Navigation: upgrade',
+  },
+  'appearance.navContract': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Navigation: contract',
+  },
+  'appearance.navBonus': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Navigation: daily bonus',
+  },
+  'appearance.navReferral': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Navigation: referrals',
+  },
+
+  'appearance.homeDropFeed': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Landing page: drop feed',
+  },
+  'appearance.homeBonusTeaser': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Landing page: bonus teaser',
+  },
+  'appearance.homeCaseFilters': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Landing page: search and price filters',
+    hint: 'Worth hiding on a small catalogue, where the filters outnumber the cases.',
+  },
+
+  'appearance.footerNoteRu': {
+    group: 'appearance',
+    kind: 'text',
+    schema: line(300),
+    default: '',
+    label: 'Footer note, Russian',
+  },
+  'appearance.footerNoteEn': {
+    group: 'appearance',
+    kind: 'text',
+    schema: line(300),
+    default: '',
+    label: 'Footer note, English',
+  },
+  'appearance.socialTelegram': {
+    group: 'appearance',
+    kind: 'url',
+    schema: optionalLink(200),
+    default: '',
+    label: 'Telegram link',
+  },
+  'appearance.socialDiscord': {
+    group: 'appearance',
+    kind: 'url',
+    schema: optionalLink(200),
+    default: '',
+    label: 'Discord link',
+  },
+  'appearance.socialVk': {
+    group: 'appearance',
+    kind: 'url',
+    schema: optionalLink(200),
+    default: '',
+    label: 'VK link',
+  },
+  'appearance.socialSteam': {
+    group: 'appearance',
+    kind: 'url',
+    schema: optionalLink(200),
+    default: '',
+    label: 'Steam group link',
+  },
+
+  'appearance.seoDescriptionRu': {
+    group: 'appearance',
+    kind: 'text',
+    schema: line(300),
+    default: '',
+    label: 'Page description, Russian',
+    hint: 'The meta description a search engine or a chat app shows under the title.',
+  },
+  'appearance.seoDescriptionEn': {
+    group: 'appearance',
+    kind: 'text',
+    schema: line(300),
+    default: '',
+    label: 'Page description, English',
   },
 
   'deposits.enabled': {
@@ -273,7 +600,7 @@ export function validateSetting<K extends SettingKey>(
   return { ok: false, errors: parsed.error.issues.map((i) => i.message) };
 }
 
-/** What a setting looks like to the admin panel: no zod schema, no default. */
+/** What a setting looks like to the admin panel: no zod schema. */
 export interface PublicSettingDef {
   group: SettingGroup;
   kind: SettingKind;
@@ -281,6 +608,14 @@ export interface PublicSettingDef {
   hint: string | null;
   /** Populated for `enum` settings only; null everywhere else. */
   options: readonly string[] | null;
+  /**
+   * The value the project ships with.
+   *
+   * Sent so the panel can offer "put it back": without it, an operator who has
+   * experimented their way into an unreadable palette has no way out short of
+   * asking somebody to edit the database.
+   */
+  default: unknown;
 }
 
 /**
@@ -301,6 +636,7 @@ export function settingDefinitions(): Record<SettingKey, PublicSettingDef> {
           label: def.label,
           hint: def.hint ?? null,
           options: def.options ?? null,
+          default: def.default,
         },
       ];
     }),

@@ -12,6 +12,8 @@ export * from './steam-profile.ts';
 export * from './upgrade.ts';
 export * from './contract.ts';
 export * from './inventory.ts';
+export * from './appearance.ts';
+export * from './analytics.ts';
 export * from './bonus.ts';
 export * from './battle.ts';
 export * from './referral.ts';
