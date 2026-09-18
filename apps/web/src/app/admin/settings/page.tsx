@@ -24,6 +24,8 @@ const GROUP_TITLES: Record<SettingGroup, TranslationKey> = {
   economy: 'admin.settings.group.economy',
   limits: 'admin.settings.group.limits',
   bonus: 'admin.settings.group.bonus',
+  battles: 'admin.settings.group.battles',
+  referral: 'admin.settings.group.referral',
   withdrawals: 'admin.settings.group.withdrawals',
 };
 

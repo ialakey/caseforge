@@ -67,9 +67,13 @@ export function Header() {
           {/* The profile is gone from the left menu: it lives on the right, on the avatar. */}
           <nav className="flex gap-1 text-sm">
             <NavLink href="/">{t('nav.cases')}</NavLink>
+            <NavLink href="/battles">{t('nav.battles')}</NavLink>
             <NavLink href="/upgrade">{t('nav.upgrade')}</NavLink>
             <NavLink href="/contract">{t('nav.contract')}</NavLink>
             <NavLink href="/bonus">{t('nav.bonus')}</NavLink>
+            {/* The referral page is only useful with a code on it, and a code
+                only exists for somebody signed in. */}
+            {user && <NavLink href="/referral">{t('nav.referral')}</NavLink>}
             {isStaff && <NavLink href="/admin">{t('nav.crm')}</NavLink>}
           </nav>
 
