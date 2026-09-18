@@ -6,6 +6,7 @@ import Redis from 'ioredis';
 import { type LiveDrop, WS_EVENTS } from '@caseforge/shared';
 import { REDIS_SUBSCRIBER } from '../common/redis.module';
 import { DROPS_CHANNEL, DropsService } from './drops.service';
+import { SiteStatsService } from '../common/site-stats.service';
 import { loadConfig } from '../common/config';
 
 /**
@@ -15,6 +16,9 @@ import { loadConfig } from '../common/config';
  * cannot tell apart.
  */
 const FLUSH_INTERVAL_MS = 300;
+
+/** How often this instance says how many sockets it is holding. */
+const PRESENCE_INTERVAL_MS = 15_000;
 const MAX_BATCH = 50;
 
 @WebSocketGateway({
@@ -25,6 +29,7 @@ export class DropsGateway implements OnModuleInit, OnModuleDestroy, OnGatewayCon
   private readonly config = loadConfig();
   private buffer: LiveDrop[] = [];
   private timer?: NodeJS.Timeout;
+  private presenceTimer?: NodeJS.Timeout;
 
   @WebSocketServer()
   server!: Server;
@@ -32,11 +37,22 @@ export class DropsGateway implements OnModuleInit, OnModuleDestroy, OnGatewayCon
   constructor(
     private readonly drops: DropsService,
     private readonly jwt: JwtService,
+    private readonly stats: SiteStatsService,
     @Inject(REDIS_SUBSCRIBER) private readonly subscriber: Redis,
   ) {}
 
   async onModuleInit(): Promise<void> {
     await this.subscriber.subscribe(DROPS_CHANNEL);
+
+    // Presence is published on a heartbeat rather than on connect and
+    // disconnect: a process that is killed never gets to say goodbye, and a
+    // count maintained by events would keep its ghosts for ever. A number that
+    // simply stops being refreshed expires on its own.
+    this.presenceTimer = setInterval(() => {
+      void this.stats
+        .reportPresence(this.server?.sockets?.sockets?.size ?? 0)
+        .catch(() => undefined);
+    }, PRESENCE_INTERVAL_MS);
     this.subscriber.on('message', (channel, message) => {
       if (channel !== DROPS_CHANNEL) return;
       try {
@@ -52,6 +68,7 @@ export class DropsGateway implements OnModuleInit, OnModuleDestroy, OnGatewayCon
 
   onModuleDestroy(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.presenceTimer) clearInterval(this.presenceTimer);
   }
 
   /**

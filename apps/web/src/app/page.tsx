@@ -3,6 +3,8 @@ import { CaseCatalogue } from '../components/CaseCatalogue';
 import { CatalogueHeadings } from '../components/CatalogueHeadings';
 import { BonusTeaser } from '../components/BonusTeaser';
 import { Hero } from '../components/Hero';
+import { SiteStatsBar } from '../components/SiteStatsBar';
+import { HomePromoCards } from '../components/HomePromoCards';
 import { getPublicConfig } from '../lib/public-config';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
@@ -33,9 +35,20 @@ export default async function HomePage() {
         <Hero caseCount={cases.length} itemCount={distinctItems} appearance={appearance} />
       )}
 
-      {/* Right under the banner: a player who has a spin waiting should not
-          have to find the bonus page to learn that. */}
-      {appearance.home.bonusTeaser && <BonusTeaser />}
+      {/* What the site has done, and who is on it. Above everything else a
+          visitor might read, because it is the fastest answer to "is this
+          place real". */}
+      {appearance.home.statsBar && <SiteStatsBar />}
+
+      {/* The bonus with its countdown, and whatever promotion is running. */}
+      {appearance.home.promoCards && <HomePromoCards />}
+
+      {/* A player who has a spin waiting should not have to find the bonus page
+          to learn that — but the promo row above already says so when it is on,
+          and two strips about the same spin is one too many. The setting still
+          decides whether the site advertises the bonus at all; this only picks
+          which of the two does it. */}
+      {appearance.home.bonusTeaser && !appearance.home.promoCards && <BonusTeaser />}
 
       {/* The drop feed used to be the first section here; it now lives above
           the header, in the layout, on every page. */}

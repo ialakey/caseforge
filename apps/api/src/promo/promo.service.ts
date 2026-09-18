@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import {
+  type FeaturedPromo,
   type PromoKind,
   type UpsertPromoCodeInput,
   ErrorCode,
@@ -138,6 +139,7 @@ export class PromoService {
       maxUses: input.maxUses,
       perUserLimit: input.perUserLimit,
       isActive: input.isActive,
+      isFeatured: input.isFeatured,
       startsAt: input.startsAt === null ? null : new Date(input.startsAt),
       expiresAt: input.expiresAt === null ? null : new Date(input.expiresAt),
     };
@@ -147,6 +149,44 @@ export class PromoService {
       create: { code: input.code, ...data },
       update: data,
     });
+  }
+
+  /**
+   * The promotion the landing page advertises, or null.
+   *
+   * Featured *and* currently valid: a code an operator marked for the front
+   * page months ago and let expire should stop being advertised on its own,
+   * rather than waiting for somebody to notice. Exhausted codes drop out too —
+   * an advertisement for something that will be refused is worse than no
+   * advertisement.
+   *
+   * Newest first when several qualify, on the grounds that the most recent one
+   * is the campaign somebody is currently running.
+   */
+  async featured(): Promise<FeaturedPromo | null> {
+    const now = new Date();
+    const code = await this.prisma.promoCode.findFirst({
+      where: {
+        isFeatured: true,
+        isActive: true,
+        AND: [
+          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+          { OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { code: true, kind: true, value: true, minDeposit: true, maxUses: true, usedCount: true },
+    });
+
+    if (!code) return null;
+    if (code.maxUses !== null && code.usedCount >= code.maxUses) return null;
+
+    return {
+      code: code.code,
+      kind: code.kind as FeaturedPromo['kind'],
+      value: code.value,
+      minDeposit: code.minDeposit,
+    };
   }
 
   /**

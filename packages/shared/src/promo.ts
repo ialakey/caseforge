@@ -145,6 +145,8 @@ export const upsertPromoCodeSchema = z
     maxUses: z.number().int().positive().nullable().default(null),
     perUserLimit: z.number().int().min(1).max(1000).default(1),
     isActive: z.boolean().default(true),
+    /** Advertised on the landing page. A separate decision from being active. */
+    isFeatured: z.boolean().default(false),
     startsAt: z.string().datetime().nullable().default(null),
     expiresAt: z.string().datetime().nullable().default(null),
   })
@@ -157,6 +159,22 @@ export const upsertPromoCodeSchema = z
     'the code would expire before it started',
   );
 export type UpsertPromoCodeInput = z.infer<typeof upsertPromoCodeSchema>;
+
+/**
+ * The promotion the landing page advertises, if there is one.
+ *
+ * Deliberately thin: a code, what it gives and the smallest top-up it applies
+ * to. Usage counts and per-player limits are an operator's business, and a
+ * public endpoint that reported how nearly exhausted a code was would be a
+ * public endpoint reporting how the site is doing.
+ */
+export interface FeaturedPromo {
+  code: string;
+  kind: PromoKind;
+  /** Basis points for PERCENT, minor units for FIXED. */
+  value: number;
+  minDeposit: number;
+}
 
 /** Redeeming a code alongside a top-up. */
 export const depositWithPromoSchema = z.object({

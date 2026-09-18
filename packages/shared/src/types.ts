@@ -186,6 +186,24 @@ export interface FreeCaseStatus {
 }
 
 /**
+ * The counters along the top of the landing page.
+ *
+ * Every one of them is a full-table count, which is why they are served
+ * together and from a cache rather than computed per visitor: they are
+ * decoration that says the site is alive, and decoration must not be the most
+ * expensive query on the busiest page.
+ */
+export interface SiteStats {
+  casesOpened: number;
+  contracts: number;
+  upgrades: number;
+  battles: number;
+  users: number;
+  /** Sockets connected right now, summed across API instances. */
+  online: number;
+}
+
+/**
  * A player's own record, for the summary at the top of their profile.
  *
  * Counts of what they have done and the single best thing that came out of it.

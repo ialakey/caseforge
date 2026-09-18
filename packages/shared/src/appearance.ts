@@ -144,6 +144,10 @@ export interface AppearanceConfig {
     bestDrop: boolean;
   };
   home: {
+    /** The counters bar: cases opened, players, who is online. */
+    statsBar: boolean;
+    /** The daily bonus and the active promo code, side by side. */
+    promoCards: boolean;
     bonusTeaser: boolean;
     caseFilters: boolean;
   };
@@ -259,7 +263,7 @@ export const DEFAULT_APPEARANCE: AppearanceConfig = {
   },
   nav: { battles: true, upgrade: true, contract: true, bonus: true, referral: true },
   dropFeed: { enabled: true, bestDrop: true },
-  home: { bonusTeaser: true, caseFilters: true },
+  home: { statsBar: true, promoCards: true, bonusTeaser: true, caseFilters: true },
   profiles: { public: true },
   footer: { note: { ru: '', en: '' }, telegram: '', discord: '', vk: '', steam: '' },
   seo: { description: { ru: '', en: '' } },
@@ -379,6 +383,8 @@ export function buildAppearance(read: (key: string) => unknown): AppearanceConfi
       bestDrop: flag('dropFeedBestDrop', true),
     },
     home: {
+      statsBar: flag('statsBar', true),
+      promoCards: flag('promoCards', true),
       bonusTeaser: flag('homeBonusTeaser', true),
       caseFilters: flag('homeCaseFilters', true),
     },
@@ -462,7 +468,12 @@ export const APPEARANCE_SECTIONS: ReadonlyArray<{
   },
   {
     key: 'home',
-    fields: ['appearance.homeBonusTeaser', 'appearance.homeCaseFilters'],
+    fields: [
+      'appearance.statsBar',
+      'appearance.promoCards',
+      'appearance.homeBonusTeaser',
+      'appearance.homeCaseFilters',
+    ],
   },
   { key: 'profiles', fields: ['appearance.publicProfiles'] },
   {

@@ -17,6 +17,7 @@ interface PromoCodeRow {
   usedCount: number;
   perUserLimit: number;
   isActive: boolean;
+  isFeatured: boolean;
   startsAt: string | null;
   expiresAt: string | null;
   createdAt: string;
@@ -31,6 +32,7 @@ const BLANK = {
   maxUses: '' as number | '',
   perUserLimit: 1,
   isActive: true,
+  isFeatured: false,
   expiresAt: '',
 };
 
@@ -79,6 +81,7 @@ export default function AdminPromoPage() {
           maxUses: form.maxUses === '' ? null : Number(form.maxUses),
           perUserLimit: Number(form.perUserLimit),
           isActive: form.isActive,
+          isFeatured: form.isFeatured,
           startsAt: null,
           expiresAt: form.expiresAt === '' ? null : new Date(form.expiresAt).toISOString(),
         }),
@@ -199,6 +202,16 @@ export default function AdminPromoPage() {
             className="cf-chip px-3 py-1.5"
           >
             {form.isActive ? t('admin.active') : t('admin.inactive')}
+          </button>
+          {/* Separate from "active" on purpose: most codes are active and are
+              nobody's business but the player they were given to. */}
+          <button
+            data-active={form.isFeatured}
+            onClick={() => setForm({ ...form, isFeatured: !form.isFeatured })}
+            className="cf-chip px-3 py-1.5"
+            title={t('admin.promo.featuredHint')}
+          >
+            {t('admin.promo.featured')}
           </button>
         </div>
       </section>

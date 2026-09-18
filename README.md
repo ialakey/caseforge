@@ -28,11 +28,11 @@ The stack and the architectural decisions are covered in
 
 
 <p align="center">
-  <img src="docs/screenshots/en/bonus-teaser.png" alt="The landing page with the live drop strip above the header" width="900">
+  <img src="docs/screenshots/en/landing.png" alt="The landing page: drop strip, banner, counters and the promo row" width="900">
 </p>
 
 <p align="center">
-  <em>The live drop strip sits above the header on every page, with the best drop of the day pinned to its left. It is clipped rather than scrollable: a new drop pushes the oldest out of sight, so the whole of it is readable without a gesture.</em>
+  <em>The live drop strip sits above the header on every page, with the best drop of the day pinned to its left; it is clipped rather than scrollable, so the whole of it is readable without a gesture. Under the banner, what the site has actually done — and who is on it right now — followed by the daily bonus and whatever promotion is running.</em>
 </p>
 
 <p align="center">
@@ -482,11 +482,11 @@ the next opening, a free opening up to a price ceiling, or a skin.
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/en/bonus-teaser.png" alt="The landing page with the daily bonus offered under the banner" width="900">
+  <img src="docs/screenshots/en/landing.png" alt="The landing page, with the daily bonus card in the promo row" width="900">
 </p>
 
 <p align="center">
-  <em>The landing page says outright that a spin is waiting. A reward the player has to go looking for is a reward most of them never claim.</em>
+  <em>The landing page says outright that a spin is waiting, and counts down to the next one when it is not. A reward the player has to go looking for is a reward most of them never claim.</em>
 </p>
 
 The wheel is not a game of its own. It is a ticket table exactly like a case,
@@ -610,6 +610,35 @@ address. A refunded battle seat takes its commission back with it.
   <em>Accrued and paid out are two different numbers, because commission sits in rows of its own until it is claimed.</em>
 </p>
 
+
+---
+
+## The landing page
+
+Four blocks above the catalogue, each switchable in the site builder.
+
+The **counters** are cases opened, contracts, upgrades, finished battles,
+registered players and who is connected right now. Everything but the last is a
+full-table count, so they are served together from a sixty-second cache — a bar
+that says the site is busy must not be the most expensive query on its busiest
+page. "Online" is read fresh on every request, because it is the one figure
+somebody might watch move.
+
+Presence is a heartbeat rather than a tally. Each API instance writes its own
+socket count under a short expiry and the total is the sum of whatever is still
+alive: a process that is killed never gets to say goodbye, and a count
+maintained by connect and disconnect events would keep its ghosts for ever.
+
+The **promo row** carries the daily bonus with its countdown and one promo code.
+Only one, and only a code an operator has explicitly put on the front page:
+`isFeatured` is a separate decision from `isActive`, because a code handed to a
+single streamer's audience — or to one player as an apology — is active and has
+no business on the shop front. It also has to still be valid, so a campaign that
+expired stops advertising itself rather than waiting for somebody to notice.
+
+Each card renders only when it has something true to say, and the bonus teaser
+further down stands aside when the promo row is on: two strips about the same
+spin is one too many.
 
 ---
 

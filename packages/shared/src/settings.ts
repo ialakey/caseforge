@@ -425,6 +425,23 @@ export const SETTINGS = {
     label: 'Maximum top-up',
   },
 
+  'appearance.statsBar': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Landing page: the counters bar',
+    hint: 'Cases opened, contracts, upgrades, battles, registered players and who is online right now. On a site that has just opened these are small numbers, and small numbers say the opposite of what the bar is for.',
+  },
+  'appearance.promoCards': {
+    group: 'appearance',
+    kind: 'boolean',
+    schema: z.coerce.boolean(),
+    default: true,
+    label: 'Landing page: the promo row',
+    hint: 'The daily bonus with its countdown and the active top-up promo code, side by side under the counters.',
+  },
+
   'deposits.itemsEnabled': {
     group: 'deposits',
     kind: 'boolean',

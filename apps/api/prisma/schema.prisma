@@ -736,6 +736,15 @@ model PromoCode {
   perUserLimit Int @default(1)
 
   isActive Boolean   @default(true)
+
+  /// Advertised on the landing page.
+  ///
+  /// Off by default, and a separate decision from `isActive`, because most
+  /// codes are not for everybody: a code handed to one streamer's audience, or
+  /// to a player as an apology, is active and must never appear on the front
+  /// page. Publishing is something an operator opts into per code.
+  isFeatured Boolean @default(false)
+
   startsAt DateTime?
   expiresAt DateTime?
 

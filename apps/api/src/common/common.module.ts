@@ -9,6 +9,8 @@ import { ConfigController } from './config.controller';
 import { HealthController } from './health.controller';
 import { FxService } from './fx.service';
 import { SettingsService } from './settings.service';
+import { SiteStatsService } from './site-stats.service';
+import { SiteStatsController } from './site-stats.controller';
 
 /**
  * Global module: PrismaService is needed by nearly every module, and importing
@@ -16,7 +18,7 @@ import { SettingsService } from './settings.service';
  */
 @Global()
 @Module({
-  controllers: [ConfigController, HealthController],
+  controllers: [ConfigController, HealthController, SiteStatsController],
   providers: [
     PrismaService,
     {
@@ -28,8 +30,16 @@ import { SettingsService } from './settings.service';
     CacheService,
     FxService,
     SettingsService,
+    SiteStatsService,
   ],
-  exports: [PrismaService, PRISMA_READ, CacheService, FxService, SettingsService],
+  exports: [
+    PrismaService,
+    PRISMA_READ,
+    CacheService,
+    FxService,
+    SettingsService,
+    SiteStatsService,
+  ],
 })
 export class CommonModule implements OnApplicationShutdown {
   private readonly logger = new Logger(CommonModule.name);
