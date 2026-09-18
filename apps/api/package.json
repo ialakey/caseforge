@@ -19,9 +19,11 @@
     "test:smoke:bonus": "node test/bonus-smoke.mjs",
     "test:smoke:admin": "node test/admin-smoke.mjs",
     "test:smoke:battles": "node test/battle-smoke.mjs",
+    "test:smoke:analytics": "node test/analytics-smoke.mjs",
     "test:load": "node test/load.mjs",
     "seed:cases": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/seed-cases.js",
-    "refresh-profile": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/refresh-profile.js"
+    "refresh-profile": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/refresh-profile.js",
+    "grant-admin": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/grant-admin.js"
   },
   "dependencies": {
     "@caseforge/shared": "workspace:*",

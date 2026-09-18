@@ -17,6 +17,7 @@ import { ContractsModule } from './contracts/contracts.module';
 import { BonusModule } from './bonus/bonus.module';
 import { PromoModule } from './promo/promo.module';
 import { BattlesModule } from './battles/battles.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { ReferralModule } from './referral/referral.module';
 import { AdminModule } from './admin/admin.module';
 
@@ -39,6 +40,7 @@ import { AdminModule } from './admin/admin.module';
     PromoModule,
     BattlesModule,
     ReferralModule,
+    AnalyticsModule,
     AdminModule,
   ],
   providers: [

@@ -27,8 +27,10 @@
     "test:smoke:bonus": "pnpm --filter @caseforge/api test:smoke:bonus",
     "test:smoke:admin": "pnpm --filter @caseforge/api test:smoke:admin",
     "test:smoke:battles": "pnpm --filter @caseforge/api test:smoke:battles",
+    "test:smoke:analytics": "pnpm --filter @caseforge/api test:smoke:analytics",
     "test:load": "pnpm --filter @caseforge/api test:load",
-    "seed:cases": "pnpm --filter @caseforge/api seed:cases"
+    "seed:cases": "pnpm --filter @caseforge/api seed:cases",
+    "grant-admin": "pnpm --filter @caseforge/api grant-admin"
   },
   "devDependencies": {
     "typescript": "^5.7.3",
