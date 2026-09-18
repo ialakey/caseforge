@@ -1,0 +1,30 @@
+# The build stage copies the whole tree; everything here is either rebuilt
+# inside the image or has no business in one.
+node_modules
+**/node_modules
+dist
+**/dist
+dist-scripts
+**/dist-scripts
+.next
+**/.next
+.turbo
+**/*.tsbuildinfo
+
+.git
+.github
+docs
+*.md
+
+.env
+.env.*
+!.env.example
+
+# Identity documents and the survey pool cache: local state, never an artefact.
+var
+apps/api/var
+apps/api/prisma/data/.cache
+
+pgdata
+redisdata
+coverage

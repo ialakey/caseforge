@@ -1,0 +1,151 @@
+name: Release
+
+# Driven by tags rather than by pushes to main. A release is a deliberate act:
+# tagging is the one moment somebody has decided that what is on main is worth
+# publishing under a version number, and everything here follows from that
+# decision rather than anticipating it.
+on:
+  push:
+    tags: ['v*']
+  # So a release can be rebuilt without moving a tag, which is the usual reason
+  # to want one — a runner failed, not the code changed.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to build'
+        required: true
+
+permissions:
+  contents: write # to create the GitHub Release
+  packages: write # to push images to ghcr.io
+
+jobs:
+  # The same checks CI runs. A tag that reaches the registry without passing
+  # them is a published artefact nobody verified — and the point of publishing
+  # is that somebody else can trust it.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+        env:
+          DATABASE_URL: postgresql://user:pass@localhost:5432/db?schema=public
+
+      - name: Build shared
+        run: pnpm --filter @caseforge/shared build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+  images:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      # One failing image should not hide whether the others build.
+      fail-fast: false
+      matrix:
+        app: [api, web, bot]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Sign in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Lower-cased because a registry namespace must be, and a GitHub owner
+      # need not be.
+      - name: Work out the image name
+        id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}-${{ matrix.app }}" >> "$GITHUB_OUTPUT"
+
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.name.outputs.image }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+          labels: |
+            org.opencontainers.image.title=caseforge-${{ matrix.app }}
+            org.opencontainers.image.licenses=PolyForm-Noncommercial-1.0.0
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          # The repository root: pnpm resolves workspace links across the whole
+          # tree, and a context of apps/<app> cannot see packages/shared.
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    needs: images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+          # The whole history, so the generated notes have something to compare
+          # against.
+          fetch-depth: 0
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          repo_lc="${GITHUB_REPOSITORY,,}"
+
+          {
+            echo "## Images"
+            echo
+            echo '```bash'
+            for app in api web bot; do
+              echo "docker pull ghcr.io/${repo_lc}-${app}:${TAG#v}"
+            done
+            echo '```'
+            echo
+            echo "## Licence"
+            echo
+            echo "PolyForm Noncommercial 1.0.0 — free for personal, hobby, research"
+            echo "and public-institution use. **Commercial use needs written permission**"
+            echo "from the author: <prosoulk2017@gmail.com>. Attribution is a licence"
+            echo "term, not a courtesy — see [NOTICE](NOTICE)."
+          } > notes.md
+
+          # `--verify-tag` refuses to invent a tag: this workflow publishes what
+          # was tagged, and a release for a tag that does not exist would be a
+          # release of something nobody pushed.
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file notes.md \
+            --generate-notes \
+            --verify-tag
