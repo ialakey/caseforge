@@ -63,14 +63,9 @@ const RARITY_EN: Record<ItemRarity, string> = {
  * wide spread, on a collection that the contents are a real CS2 collection.
  */
 const OPENING: Record<string, { ru: (name: string) => string; en: (name: string) => string }> = {
-  // The survey calls this shelf "free cases", and here they are not free:
-  // a case price must be positive, and the solver raises anything priced
-  // below its own cheapest skin. So the copy promises the cheapest entry
-  // rather than a free one — the shelf keeps the source's name, but a
-  // paragraph that told a player this costs nothing would simply be a lie.
   free: {
-    ru: () => 'Стартовый кейс: самый дешёвый вход — минимальная ставка и живой набор скинов.',
-    en: () => 'An entry-level case: the cheapest way in, with a real line-up inside.',
+    ru: () => 'Бесплатный кейс: открывается без списания, по порогу пополнения и раз в сутки.',
+    en: () => 'A free case: nothing is charged — a top-up threshold and a daily cooldown ration it.',
   },
   rarity: {
     ru: (name) => `Кейс одного класса редкости: «${name}» собран по раритетности.`,

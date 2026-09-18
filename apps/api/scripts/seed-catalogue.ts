@@ -432,9 +432,21 @@ async function main(): Promise<void> {
     const prices = priced.map((p) => p.price);
     const floor = Math.ceil(Math.min(...prices) / targetRtp);
     const ceiling = Math.floor(Math.max(...prices) / targetRtp);
-    let price = toMinor(entry.price);
 
-    if (price < floor || price > ceiling) {
+    // A survey case priced at nothing is a free case, and this project has
+    // them: it costs zero and is rationed by a top-up threshold and a daily
+    // cooldown instead. The thresholds are not in the survey and are not
+    // invented here — they are operator policy, and an upsert that omits them
+    // leaves whatever the operator set.
+    const isFree = entry.price === 0;
+
+    // The solver still needs a price, even for a free case: it is what shapes
+    // the curve that makes cheap skins common and knives rare. The cheapest
+    // price the table supports is used as that reference and then thrown
+    // away — the case is saved at zero.
+    let price = isFree ? floor : toMinor(entry.price);
+
+    if (!isFree && (price < floor || price > ceiling)) {
       const clamped = Math.min(Math.max(price, floor), ceiling);
       problems.push(
         `${entry.slug} (${entry.name}): price ${entry.price} -> ` +
@@ -461,11 +473,18 @@ async function main(): Promise<void> {
 
     // `actualRtp`, not the target: rounding shares to whole tickets moves the
     // number, and the one that gets judged has to be the one players face.
-    const verdict = judgeRtp(balanced.actualRtp);
-    if (!verdict.allowed) {
-      skipped += 1;
-      problems.push(`${entry.slug}: ${verdict.message}`);
-      continue;
+    //
+    // A free case is exempt, because it has no RTP to judge: nothing is
+    // staked, and the reference price above was scaffolding for the curve
+    // rather than a claim about what the case costs. This is what used to
+    // drop three of the survey's free cases on the floor.
+    if (!isFree) {
+      const verdict = judgeRtp(balanced.actualRtp);
+      if (!verdict.allowed) {
+        skipped += 1;
+        problems.push(`${entry.slug}: ${verdict.message}`);
+        continue;
+      }
     }
 
     // The description is written from the table that was actually balanced,
@@ -520,7 +539,8 @@ async function main(): Promise<void> {
         nameEn: null,
         description: copy.description,
         descriptionEn: copy.descriptionEn,
-        price,
+        price: isFree ? 0 : price,
+        isFree,
         // Our own drawing, not a borrowed picture. Passing null instead would
         // let the price synchronisation fall back to the priciest item's
         // image, which is how the hand-made cases look — but two hundred
@@ -537,8 +557,10 @@ async function main(): Promise<void> {
     created += 1;
     logger.log(
       `  ${index + 1}/${selection.length} ${entry.name}: ${table.length} items, ` +
-        `${(price / 100).toFixed(2)}, RTP ${(balanced.actualRtp * 100).toFixed(1)}% ` +
-        `(+${imported.imported} new items)`,
+        (isFree
+          ? 'free'
+          : `${(price / 100).toFixed(2)}, RTP ${(balanced.actualRtp * 100).toFixed(1)}%`) +
+        ` (+${imported.imported} new items)`,
     );
   }
 

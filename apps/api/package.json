@@ -23,6 +23,7 @@
     "test:load": "node test/load.mjs",
     "seed:cases": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/seed-cases.js",
     "seed:catalogue": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/seed-catalogue.js",
+    "rebalance-cases": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/rebalance-cases.js",
     "refresh-profile": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/refresh-profile.js",
     "grant-admin": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/grant-admin.js"
   },

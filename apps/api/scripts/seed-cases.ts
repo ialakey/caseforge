@@ -232,6 +232,9 @@ async function main(): Promise<void> {
         name: blueprint.name,
         nameEn: blueprint.nameEn,
         price: casePrice,
+        // These demo cases are ordinary paid ones; free cases come from the
+        // catalogue importer, where the survey says the price is zero.
+        isFree: false,
         imageUrl: top.imageUrl,
         isActive: true,
         sortOrder: blueprint.sortOrder,
