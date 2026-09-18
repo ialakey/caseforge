@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import {
   type UpsertCaseInput,
   ErrorCode,
@@ -8,6 +8,7 @@ import {
   validateTicketRanges,
 } from '@caseforge/shared';
 import { PrismaService } from '../common/prisma.service';
+import { PRISMA_READ } from '../common/prisma-read';
 import { SettingsService } from '../common/settings.service';
 import { CasesService } from '../cases/cases.service';
 import { MarketService } from '../market/market.service';
@@ -17,6 +18,14 @@ import { badRequest, notFound } from '../common/app-error';
 export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
+    /**
+     * Every report and every listing on this class reads through here, and a
+     * configured replica is what stops them touching the game core: a
+     * thirty-day dashboard aggregate over `case_openings` is the heaviest query
+     * the site makes, and it runs while people are opening cases. What an
+     * operator is looking at may be seconds out of date; a debit may not.
+     */
+    @Inject(PRISMA_READ) private readonly read: PrismaClient,
     private readonly cases: CasesService,
     private readonly settings: SettingsService,
     private readonly market: MarketService,
@@ -33,23 +42,23 @@ export class AdminService {
     const period = { gte: from, lte: to };
 
     const [openingAgg, deposits, withdrawalsCompleted, newUsers, activeUsers] = await Promise.all([
-      this.prisma.caseOpening.aggregate({
+      this.read.caseOpening.aggregate({
         where: { createdAt: period },
         _sum: { casePrice: true, itemPrice: true },
         _count: true,
       }),
-      this.prisma.transaction.aggregate({
+      this.read.transaction.aggregate({
         where: { type: 'DEPOSIT', createdAt: period },
         _sum: { amount: true },
         _count: true,
       }),
-      this.prisma.withdrawal.aggregate({
+      this.read.withdrawal.aggregate({
         where: { status: 'COMPLETED', completedAt: period },
         _sum: { totalValue: true },
         _count: true,
       }),
-      this.prisma.user.count({ where: { createdAt: period } }),
-      this.prisma.caseOpening
+      this.read.user.count({ where: { createdAt: period } }),
+      this.read.caseOpening
         .findMany({ where: { createdAt: period }, select: { userId: true }, distinct: ['userId'] })
         .then((rows) => rows.length),
     ]);
@@ -78,14 +87,14 @@ export class AdminService {
 
   /** Per-case margin: where the site earns and where it loses. */
   async caseReport(from: Date, to: Date) {
-    const grouped = await this.prisma.caseOpening.groupBy({
+    const grouped = await this.read.caseOpening.groupBy({
       by: ['caseId'],
       where: { createdAt: { gte: from, lte: to } },
       _sum: { casePrice: true, itemPrice: true },
       _count: true,
     });
 
-    const cases = await this.prisma.case.findMany({
+    const cases = await this.read.case.findMany({
       where: { id: { in: grouped.map((g) => g.caseId) } },
       select: { id: true, name: true, slug: true, price: true, rtpCached: true },
     });
@@ -208,13 +217,17 @@ export class AdminService {
       });
     });
 
+    // The catalogue everybody reads is cached; the operator who just edited it
+    // has to see their own change rather than the last minute of staleness.
+    await this.cases.invalidateCatalogue();
+
     await this.audit(actorId, 'case.upsert', 'Case', saved.id, before, saved, ip);
     return saved;
   }
 
   /** Every case, disabled ones included — this is the operator's view, not the player's. */
   async listCases() {
-    const cases = await this.prisma.case.findMany({
+    const cases = await this.read.case.findMany({
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
       include: { items: { include: { item: true }, orderBy: { rangeFrom: 'asc' } } },
     });
@@ -239,7 +252,7 @@ export class AdminService {
 
   /** A full case for editing in the builder. */
   async getCase(slug: string) {
-    const gameCase = await this.prisma.case.findUnique({
+    const gameCase = await this.read.case.findUnique({
       where: { slug },
       include: { items: { include: { item: true }, orderBy: { rangeFrom: 'asc' } } },
     });
@@ -275,8 +288,8 @@ export class AdminService {
       : {};
 
     const [total, items] = await Promise.all([
-      this.prisma.item.count({ where }),
-      this.prisma.item.findMany({
+      this.read.item.count({ where }),
+      this.read.item.findMany({
         where,
         orderBy: { marketHashName: 'asc' },
         skip: (page - 1) * perPage,
@@ -297,8 +310,8 @@ export class AdminService {
       : {};
 
     const [total, users] = await Promise.all([
-      this.prisma.user.count({ where }),
-      this.prisma.user.findMany({
+      this.read.user.count({ where }),
+      this.read.user.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * perPage,
@@ -398,8 +411,8 @@ export class AdminService {
     const where = status ? { status: status as Prisma.EnumWithdrawalStatusFilter['equals'] } : {};
 
     const [total, items] = await Promise.all([
-      this.prisma.withdrawal.count({ where }),
-      this.prisma.withdrawal.findMany({
+      this.read.withdrawal.count({ where }),
+      this.read.withdrawal.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * perPage,
@@ -433,8 +446,8 @@ export class AdminService {
     const [accounts, spendable, counts, stuck, spent] = await Promise.all([
       this.market.accounts(),
       this.market.spendableBalance(),
-      this.prisma.marketPurchase.groupBy({ by: ['status'], _count: { _all: true } }),
-      this.prisma.marketPurchase.findMany({
+      this.read.marketPurchase.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.read.marketPurchase.findMany({
         where: { status: 'BOUGHT', boughtAt: { lt: cutoff } },
         orderBy: { boughtAt: 'asc' },
         take: 50,
@@ -447,7 +460,7 @@ export class AdminService {
       }),
       // What the channel has actually cost, against what the site valued the
       // items at. The gap is the margin the overpay ceiling is protecting.
-      this.prisma.marketPurchase.aggregate({
+      this.read.marketPurchase.aggregate({
         where: { status: 'DELIVERED' },
         _sum: { paidPrice: true, maxPrice: true },
         _count: { _all: true },
@@ -474,8 +487,8 @@ export class AdminService {
       : {};
 
     const [total, items] = await Promise.all([
-      this.prisma.marketPurchase.count({ where }),
-      this.prisma.marketPurchase.findMany({
+      this.read.marketPurchase.count({ where }),
+      this.read.marketPurchase.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * perPage,
@@ -530,7 +543,7 @@ export class AdminService {
   }
 
   async listBots() {
-    return this.prisma.steamBot.findMany({
+    return this.read.steamBot.findMany({
       orderBy: { createdAt: 'asc' },
       select: {
         id: true,
@@ -548,8 +561,8 @@ export class AdminService {
 
   async listAuditLog(page: number, perPage: number) {
     const [total, items] = await Promise.all([
-      this.prisma.auditLog.count(),
-      this.prisma.auditLog.findMany({
+      this.read.auditLog.count(),
+      this.read.auditLog.findMany({
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * perPage,
         take: perPage,

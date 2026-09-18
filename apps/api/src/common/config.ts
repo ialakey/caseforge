@@ -13,6 +13,12 @@ const envSchema = z.object({
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
 
   DATABASE_URL: z.string().min(1),
+  /**
+   * Read replica, optional. Unset — the normal case on one box — sends every
+   * read to the primary. Set, it serves the reads that tolerate replication
+   * lag: reports, the public catalogue, the lobby, the drop feed.
+   */
+  REPLICA_DATABASE_URL: z.string().default(''),
   REDIS_URL: z.string().min(1),
 
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET: at least 32 characters'),
@@ -54,7 +60,9 @@ export function loadConfig(): AppConfig {
   loadEnv();
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
-    const details = parsed.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`).join('\n');
+    const details = parsed.error.issues
+      .map((i) => `  ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
     throw new Error(`Invalid environment:\n${details}`);
   }
   // On by default in development, in production only behind an explicit flag.

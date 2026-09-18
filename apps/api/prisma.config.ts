@@ -7,6 +7,11 @@ import { defineConfig } from 'prisma/config';
 dotenvConfig({ path: path.join(__dirname, '../../.env') });
 dotenvConfig({ path: path.join(__dirname, '.env') });
 
+// Migrations must not go through PgBouncer, so the schema reads them from
+// DIRECT_DATABASE_URL. It defaults to DATABASE_URL, which is the whole
+// configuration a single-server setup needs.
+process.env.DIRECT_DATABASE_URL ??= process.env.DATABASE_URL;
+
 export default defineConfig({
   schema: path.join('prisma', 'schema.prisma'),
   migrations: {

@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'node:crypto';
-import type { Battle, CaseItem, Item, Prisma } from '@prisma/client';
+import type { Battle, CaseItem, Item, Prisma, PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
 import {
   type BattleActionResult,
@@ -26,6 +26,7 @@ import {
 } from '@caseforge/shared';
 import { computeRoll } from '@caseforge/shared/node';
 import { PrismaService } from '../common/prisma.service';
+import { PRISMA_READ } from '../common/prisma-read';
 import { SettingsService } from '../common/settings.service';
 import { CasesService } from '../cases/cases.service';
 import { DropsService } from '../drops/drops.service';
@@ -78,6 +79,13 @@ export class BattlesService {
 
   constructor(
     private readonly prisma: PrismaService,
+    /**
+     * The lobby only. A single battle is read from the primary on purpose: the
+     * player who just took a seat is handed that very battle back, and a
+     * replica half a second behind would show them a seat they have paid for
+     * and cannot see.
+     */
+    @Inject(PRISMA_READ) private readonly read: PrismaClient,
     private readonly settings: SettingsService,
     private readonly cases: CasesService,
     private readonly drops: DropsService,
@@ -88,13 +96,13 @@ export class BattlesService {
   /** The lobby: what can still be joined, and what has just been played. */
   async list(): Promise<{ open: BattleSummary[]; finished: BattleSummary[] }> {
     const [open, finished] = await Promise.all([
-      this.prisma.battle.findMany({
+      this.read.battle.findMany({
         where: { status: { in: ['WAITING', 'RUNNING'] } },
         orderBy: { createdAt: 'desc' },
         take: LOBBY_LIMIT,
         include: summaryInclude,
       }),
-      this.prisma.battle.findMany({
+      this.read.battle.findMany({
         where: { status: 'FINISHED' },
         orderBy: { finishedAt: 'desc' },
         take: HISTORY_LIMIT,

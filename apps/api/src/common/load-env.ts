@@ -11,4 +11,12 @@ export function loadEnv(): void {
   for (const candidate of [resolve(process.cwd(), '.env'), resolve(process.cwd(), '../../.env')]) {
     if (existsSync(candidate)) dotenvConfig({ path: candidate });
   }
+
+  // `directUrl` in the Prisma schema is what migrations and introspection use,
+  // and it must resolve even when nobody has heard of it: a deployment behind
+  // PgBouncer points DATABASE_URL at the pooler and DIRECT_DATABASE_URL at
+  // Postgres itself, while a single-server setup sets neither and both are the
+  // same string. Prisma refuses to start on an unset referenced variable, so
+  // the default is filled in here rather than duplicated into every .env.
+  process.env.DIRECT_DATABASE_URL ??= process.env.DATABASE_URL;
 }

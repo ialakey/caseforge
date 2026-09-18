@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import type { Item } from '@prisma/client';
 import { judgeRtp } from '@caseforge/shared';
 import { PrismaService } from '../common/prisma.service';
+import { CacheNamespace, CacheService } from '../common/cache.service';
 import { SteamMarketService } from './steam-market.service';
 
 /**
@@ -26,6 +27,7 @@ export class ItemSyncService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
     private readonly market: SteamMarketService,
   ) {}
 
@@ -169,6 +171,9 @@ export class ItemSyncService {
     // Recalculation always runs, not only when prices moved: it also fills in
     // missing case images, and it costs a handful of queries.
     await this.recalculateActiveCases();
+    // Prices, images and RTPs have moved: whatever the catalogue cache is
+    // holding is now describing the previous hour.
+    await this.cache.invalidate(CacheNamespace.CATALOGUE);
     if (enriched > 0) this.logger.log(`Item images filled in: ${enriched}`);
     return { checked: items.length, changed, enriched };
   }

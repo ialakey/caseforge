@@ -7,6 +7,12 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+
+  /// Migrations and introspection bypass the connection pooler. They open long
+  /// sessions, create types and take locks that transaction pooling cannot
+  /// carry across statements, so `url` may point at PgBouncer while this points
+  /// at Postgres itself. Defaults to DATABASE_URL when nobody set it.
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 enum UserRole {
@@ -228,6 +234,11 @@ model Item {
 
   @@index([rarity])
   @@index([isActive])
+  /// The price-band scans: a contract's reward pool and the wheel's free-skin
+  /// slice both ask for active items inside a price range, and that range can
+  /// span fiftyfold. Without this the planner walks the whole catalogue on
+  /// every contract preview.
+  @@index([isActive, marketPrice])
   @@map("items")
 }
 

@@ -6,7 +6,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import type { Case, CaseItem, Item, Prisma } from '@prisma/client';
+import type { Case, CaseItem, Item, Prisma, PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
 import {
   type CaseView,
@@ -23,6 +23,8 @@ import {
 } from '@caseforge/shared';
 import { computeRoll } from '@caseforge/shared/node';
 import { PrismaService } from '../common/prisma.service';
+import { PRISMA_READ } from '../common/prisma-read';
+import { CacheNamespace, CacheService } from '../common/cache.service';
 import { badRequest, forbidden, notFound } from '../common/app-error';
 import { REDIS_CLIENT } from '../common/redis.module';
 import { DropsService } from '../drops/drops.service';
@@ -37,6 +39,17 @@ import { SettingsService } from '../common/settings.service';
  * during an incident without a deploy.
  */
 
+/**
+ * How long the catalogue may be stale.
+ *
+ * The catalogue is the most requested read on the site and it changes when an
+ * operator saves a case or the hourly price sync runs — both of which
+ * invalidate it explicitly, so this TTL is not the freshness guarantee but the
+ * backstop for a bump that never arrived. A minute of staleness on a chance or
+ * a price is invisible to a player; a minute of identical joins at peak is not.
+ */
+const CATALOGUE_TTL_SEC = 60;
+
 type CaseWithItems = Case & { items: (CaseItem & { item: Item })[] };
 
 @Injectable()
@@ -45,6 +58,10 @@ export class CasesService {
 
   constructor(
     private readonly prisma: PrismaService,
+    // Reads only, and only ones a few seconds of replication lag cannot spoil:
+    // the catalogue an operator edits, not the balance a player just spent.
+    @Inject(PRISMA_READ) private readonly read: PrismaClient,
+    private readonly cache: CacheService,
     private readonly drops: DropsService,
     private readonly bonus: BonusService,
     private readonly referral: ReferralService,
@@ -58,21 +75,45 @@ export class CasesService {
   }
 
   async listCases(): Promise<CaseView[]> {
-    const cases = await this.prisma.case.findMany({
-      where: { isActive: true },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-      include: { items: { include: { item: true }, orderBy: { rangeFrom: 'asc' } } },
+    return this.cache.wrap(CacheNamespace.CATALOGUE, 'list', CATALOGUE_TTL_SEC, async () => {
+      const cases = await this.read.case.findMany({
+        where: { isActive: true },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        include: { items: { include: { item: true }, orderBy: { rangeFrom: 'asc' } } },
+      });
+      return cases.map((c) => this.toCaseView(c));
     });
-    return cases.map((c) => this.toCaseView(c));
   }
 
   async getCaseBySlug(slug: string): Promise<CaseView> {
-    const found = await this.prisma.case.findUnique({
-      where: { slug },
-      include: { items: { include: { item: true }, orderBy: { rangeFrom: 'asc' } } },
-    });
-    if (!found) throw new NotFoundException('Case not found');
-    return this.toCaseView(found);
+    const cached = await this.cache.wrap<CaseView | null>(
+      CacheNamespace.CATALOGUE,
+      `slug:${slug}`,
+      CATALOGUE_TTL_SEC,
+      async () => {
+        const found = await this.read.case.findUnique({
+          where: { slug },
+          include: { items: { include: { item: true }, orderBy: { rangeFrom: 'asc' } } },
+        });
+        return found ? this.toCaseView(found) : null;
+      },
+    );
+    // A miss is cached too, and on purpose: a crawler walking made-up slugs
+    // would otherwise be a database query per request.
+    if (!cached) throw new NotFoundException('Case not found');
+    return cached;
+  }
+
+  /**
+   * Drops the cached catalogue.
+   *
+   * Called by whoever changed what it says: a case saved in the back office,
+   * an RTP recalculation, the price sync. The opening path deliberately does
+   * not use the cache at all — it reads the case inside its own transaction,
+   * because a stale price there would be a stale amount of money.
+   */
+  async invalidateCatalogue(): Promise<void> {
+    await this.cache.invalidate(CacheNamespace.CATALOGUE);
   }
 
   /**
@@ -295,6 +336,7 @@ export class CasesService {
       where: { id: caseId },
       data: { rtpCached: rtp, rtpCalculatedAt: new Date() },
     });
+    await this.invalidateCatalogue();
     return rtp;
   }
 

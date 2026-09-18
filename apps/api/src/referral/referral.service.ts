@@ -42,41 +42,43 @@ export class ReferralService {
     await this.settings.ensureFresh();
     const code = await this.ensureCode(userId);
 
-    const [pendingAgg, claimedAgg, links, earnings, origin] = await Promise.all([
-      this.prisma.referralEarning.aggregate({
-        where: { referrerId: userId, claimedAt: null },
-        _sum: { amount: true },
-      }),
-      this.prisma.referralEarning.aggregate({
-        where: { referrerId: userId, claimedAt: { not: null } },
-        _sum: { amount: true },
-      }),
-      this.prisma.referral.findMany({
-        where: { referrerId: userId },
-        orderBy: { createdAt: 'desc' },
-        take: INVITEE_LIMIT,
-        include: { referee: { select: { id: true, username: true, avatarUrl: true } } },
-      }),
-      this.prisma.referralEarning.findMany({
-        where: { referrerId: userId },
-        orderBy: { createdAt: 'desc' },
-        take: EARNING_LIMIT,
-        include: { referee: { select: { username: true } } },
-      }),
-      this.prisma.referral.findUnique({
-        where: { refereeId: userId },
-        include: { referrer: { select: { username: true, avatarUrl: true } } },
-      }),
-    ]);
+    const [pendingAgg, claimedAgg, links, earnings, origin, invited, perReferee] =
+      await Promise.all([
+        this.prisma.referralEarning.aggregate({
+          where: { referrerId: userId, claimedAt: null },
+          _sum: { amount: true },
+        }),
+        this.prisma.referralEarning.aggregate({
+          where: { referrerId: userId, claimedAt: { not: null } },
+          _sum: { amount: true },
+        }),
+        this.prisma.referral.findMany({
+          where: { referrerId: userId },
+          orderBy: { createdAt: 'desc' },
+          take: INVITEE_LIMIT,
+          include: { referee: { select: { id: true, username: true, avatarUrl: true } } },
+        }),
+        this.prisma.referralEarning.findMany({
+          where: { referrerId: userId },
+          orderBy: { createdAt: 'desc' },
+          take: EARNING_LIMIT,
+          include: { referee: { select: { username: true } } },
+        }),
+        this.prisma.referral.findUnique({
+          where: { refereeId: userId },
+          include: { referrer: { select: { username: true, avatarUrl: true } } },
+        }),
+        this.prisma.referral.count({ where: { referrerId: userId } }),
+        // What each invitee has brought in, claimed or not. Grouped rather than
+        // counted per row: an inviter with fifty recruits would otherwise be
+        // fifty queries.
+        this.prisma.referralEarning.groupBy({
+          by: ['refereeId'],
+          where: { referrerId: userId },
+          _sum: { amount: true },
+        }),
+      ]);
 
-    // What each invitee has brought in, claimed or not. Grouped rather than
-    // counted per row: an inviter with fifty recruits would otherwise be fifty
-    // queries.
-    const perReferee = await this.prisma.referralEarning.groupBy({
-      by: ['refereeId'],
-      where: { referrerId: userId },
-      _sum: { amount: true },
-    });
     const earnedByReferee = new Map(perReferee.map((row) => [row.refereeId, row._sum.amount ?? 0]));
 
     return {
@@ -86,7 +88,7 @@ export class ReferralService {
       wagerBps: this.settings.get<number>('referral.wagerBps'),
       minClaim: this.settings.get<number>('referral.minClaim'),
 
-      invited: await this.prisma.referral.count({ where: { referrerId: userId } }),
+      invited,
       pending: pendingAgg._sum.amount ?? 0,
       claimed: claimedAgg._sum.amount ?? 0,
 
