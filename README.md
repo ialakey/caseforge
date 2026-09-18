@@ -106,6 +106,7 @@ pnpm test          # unit tests: provable fairness, ticket ranges, balancing, up
 pnpm typecheck     # every package
 pnpm test:smoke    # end-to-end run against a live API
 pnpm test:smoke:battles   # battles and referrals, same requirements
+pnpm test:smoke:analytics # the appearance builder and the analytics contour
 pnpm test:load     # load generator, also against a live API
 ```
 
@@ -190,6 +191,11 @@ maintenance for an audience of a few people.
   or a skin, rolled from the same seed pair as everything else
 - **promo codes on a top-up**: percentage or flat, with per-code and per-player
   limits, created in the back office
+- **the site builder**: the name, logo, palette, banner, navigation and footer
+  are settings served to the browser at runtime, with presets and a live preview
+- **analytics**: visitors, funnels, retention cohorts, traffic sources,
+  per-feature margin and per-player revenue, with the money read from the ledger
+  rather than from a second set of numbers
 - **runtime settings**: limits, fees, the top-up bounds and the wheel itself are
   edited in the panel and take effect without a deploy
 - the whole interface, **back office included**, switches between Russian and
@@ -232,7 +238,7 @@ What actually needs filling in before a production run:
 | `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | `openssl rand -hex 32` each |
 | `STEAM_API_KEY` | https://steamcommunity.com/dev/apikey. Without it the profile falls back to the public XML; sign-in works either way |
 | `BOT_SECRETS_KEY` | `openssl rand -hex 32`, exactly 64 hex characters. Encrypts both the market API keys and the Steam bot secrets |
-| `BOOTSTRAP_ADMIN_STEAM_ID` | your SteamID64: that account gets the ADMIN role on first sign-in |
+| `BOOTSTRAP_ADMIN_STEAM_ID` | your SteamID64: that account gets the ADMIN role on first sign-in. An account that already exists is promoted with `pnpm grant-admin <SteamID64 \| nickname>` |
 | `ENABLE_STUB_DEPOSITS` | `true`/`false`. The stub top-up. On by default in development, **off in production**, enabled only by an explicit `true` |
 
 ---
@@ -484,6 +490,63 @@ address. A refunded battle seat takes its commission back with it.
 
 ---
 
+## The site builder
+
+`/admin/appearance`. The name, the logo, the palette, the banner, which sections
+exist in the navigation and what the footer says are settings, not code — they
+are served to the browser at runtime and take effect on the next page load.
+
+<p align="center">
+  <img src="docs/screenshots/en/admin-appearance.png" alt="The appearance builder with the palette fields, the live preview and the site preview" width="900">
+</p>
+
+<p align="center">
+  <em>The panel on the right is drawn from the draft and follows the colour picker immediately; the frame below it shows the saved site, which is what a visitor would get.</em>
+</p>
+
+The stylesheet was already built on tokens, so nothing in a component knows that
+a colour is configurable — which is exactly why every component responds to one.
+Five presets give a starting point, and every field stays editable afterwards.
+
+**An empty field means the shipped default.** A blank headline falls back to the
+translated string, so an operator fills in only what they want to differ and a
+site nobody has configured looks exactly as it ships — in both languages.
+Appearance cannot reach the odds: the ticket space, the RTP and the wheel live in
+their own groups, where a change is a change to the game rather than to its
+paint.
+
+---
+
+## Analytics
+
+`/admin/analytics`. Visitors, sessions, signups, active players, turnover, GGR,
+actual RTP, deposits, withdrawals, per-player revenue, battles and referral
+commission — over any of three periods, each against the period before it.
+
+<p align="center">
+  <img src="docs/screenshots/en/admin-analytics.png" alt="The analytics dashboard with its KPI tiles, the daily chart, the funnel and the per-feature margin" width="900">
+</p>
+
+<p align="center">
+  <em>Every tile carries its change against the previous period of the same length: a number with nothing to compare it to is a number nobody can act on.</em>
+</p>
+
+Behind it is one rule: **the ledger is the analytics store for everything that
+moved money.** A report over openings and transactions is a query, so that is
+what it is; the event stream carries only what the database cannot answer —
+arrivals, sources, page views, and the clicks that never became a purchase. The
+funnel is where the two meet, with an event-based top and a ledger-based bottom.
+
+The dashboard also has traffic sources with their conversion, weekly retention
+cohorts, the top players by turnover, per-feature margin, device split, and the
+raw event stream for when a number needs explaining. Daily rollups keep a month
+of history cheap to read; the headline numbers are computed over the range
+itself, because a sum of daily uniques is not a unique.
+
+No IP addresses and no user agents are stored.
+
+---
+
 ## Runtime settings
 
 `/admin/settings`. Maintenance mode, the top-up bounds, the sell-back fee, the
@@ -706,10 +769,12 @@ apps/
     src/withdrawals/         withdrawal requests and queueing
     src/market/              the market.csgo.com account, for the back office
     src/admin/               CRM: reports, case builder, audit
+    src/analytics/           the event stream, the nightly rollups and the reports
     src/steam/               OpenID, the Steam market, price and image sync
     src/common/              config, Prisma, the read client, the Redis cache, health, roles, nightly reconciliation
     test/smoke.mjs           end-to-end run against a live API
     test/battle-smoke.mjs    battles and referrals against a live API
+    test/analytics-smoke.mjs the appearance builder and the analytics contour
     test/load.mjs            load generator: browse, open, battles, mixed
   bot/
     src/market-pool.ts       the market accounts: throttling, balances, whose turn it is
@@ -740,6 +805,8 @@ packages/
     src/upgrade.ts           upgrade odds and bounds
     src/contract.ts          contract reward table: the tilt and its solver
     src/bonus.ts             the wheel: slices, ticket ranges, cooldown
+    src/appearance.ts        the theme, its CSS variables and the presets
+    src/analytics.ts         event contract, metric keys, funnel and retention maths
     src/battle.ts            battle limits, entry price, standings and tiebreaks
     src/promo.ts             promo code rules and what one is worth
     src/referral.ts          invite codes, commission and the binding rules

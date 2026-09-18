@@ -978,6 +978,113 @@ which accrued commission becomes money.
 
 ---
 
+## 11d. Appearance as configuration
+
+What the site is called, what colour it is, which sections exist and what the
+banner says are settings, served to the browser at runtime. The alternative —
+editing Tailwind classes and redeploying — makes the look a developer task,
+which is not what it is.
+
+It works because the stylesheet was already built on tokens. Every component
+reads `--accent`, `--surface-raised`, `--radius`; the appearance settings are
+converted to those custom properties by one function in the shared package and
+rendered into the document root by the server. Nothing in a component knows that
+a colour is configurable, which is exactly why every component responds to it.
+
+Two rules keep it from becoming a second way to break the site:
+
+**Empty means the shipped default.** A blank headline is not a blank headline on
+the page: the front end falls back to the translated string in the dictionary.
+So an operator fills in only what they want to differ, a site nobody has
+configured looks exactly as it ships — in both languages — and a half-filled
+form never produces a half-empty page.
+
+**Appearance cannot reach the odds.** The palette and the banner live in their
+own group. The ticket space, the RTP and the wheel live in theirs, where a
+change is a change to the game rather than to its paint.
+
+The colours are stored as hex, which is what a colour input produces and what a
+brand guide is written in, and converted to the `H S% L%` triple the stylesheet
+needs. That conversion is a tested function rather than a format the panel
+happens to write: the tokens are bare components precisely so a rule can say
+`hsl(var(--accent) / 0.14)`, and a value in the wrong shape would take the whole
+palette down.
+
+### The builder
+
+`/admin/appearance` renders the same settings the generic form would, grouped
+the way somebody thinks about a page, with two previews. The panel beside the
+fields is drawn from the draft and responds to the colour picker immediately;
+the iframe below it shows the **saved** state, because that is the honest thing
+for it to show — the site as a visitor would get it. Presets exist for the same
+reason a starting point always does: a dozen colour pickers and no default is
+how a site ends up unreadable.
+
+The metadata follows too. The title and description are generated from the
+settings on the server, so a renamed site is renamed in every link anybody
+shares afterwards rather than only in the header.
+
+---
+
+## 11e. The analytics contour
+
+The split that everything else follows from: **the database is already the
+analytics store for everything that moved money.** Openings, deposits, battles,
+referrals and withdrawals are rows with amounts and timestamps, and a report over
+them is a query. Re-emitting them as analytics events would create a second set
+of numbers that can disagree with the ledger — and when a report and the ledger
+disagree, the report is the one nobody trusts again.
+
+So the event stream carries only what the database cannot answer: that somebody
+arrived, where from, what they looked at, and where they stopped. Six event
+types, no more, and each one is something no table records — a page view, the
+press of the Steam button, the top-up dialog opening, a promo code being tried,
+the click that starts a battle, an invite link being followed.
+
+The two meet in the funnel: an event-based top, a ledger-based bottom.
+
+```
+visitors   →  signups  →  deposited  →  played  →  withdrew
+(events)      (users)     (ledger)     (openings) (withdrawals)
+```
+
+### What is not collected
+
+No IP address and no user agent. The stream is about behaviour, not identity,
+and neither answers a question about behaviour that a coarse `desktop / mobile /
+tablet` does not — while both would turn a traffic report into a store of
+personal data. The device class is derived from the request header and stored
+instead of it.
+
+### Rollups, and why the headline is not the sum of the chart
+
+Daily metrics are summarised once a night into one row per metric per day, which
+makes a month of history cheap to read and keeps it after the raw events are
+pruned. Today's row is refreshed on demand, because an operator watching a
+promotion cannot wait until tomorrow.
+
+The headline numbers are **not** read from those rows. A sum of daily uniques is
+not a unique: somebody who visited on Monday and Tuesday is two daily visitors
+and one visitor, and a KPI that added the chart up would overcount every
+returning player. So the tiles are computed over the whole range with proper
+distinct counts, and the charts come from the rollups. Two paths, each correct
+for the question it answers.
+
+`pnpm test:smoke:analytics` pins the seam that matters: that `wagered` in a
+report equals the sum of `case_openings.casePrice` exactly, and that a rollup
+recomputed twice does not double anything.
+
+### Per-feature margin
+
+A roadmap is decided on GGR per feature, and that cannot be counted in clicks:
+cases and battles are the stake minus what dropped, an upgrade is the stake
+minus the targets that were won, a contract is what went in minus the reward,
+and the wheel only ever costs money — that is what it is for. Each row is
+measured in its own terms and the table says so, because a single formula
+applied to all five would be wrong four times.
+
+---
+
 ## 12. Money coming in: top-ups
 
 Today the "Top up" button is backed by a stub — the server credits the entered
@@ -1034,3 +1141,6 @@ fields already exist on `User`).
 - **Stage 4.** Payments, KYC, full CRM reporting.
 - **Stage 5 (done).** Load testing, PgBouncer, a read replica, caching and
   health checks — section 10.
+
+Outside the roadmap, because they turned out to be needed before stage 4: the
+appearance builder (section 11d) and the analytics contour (section 11e).

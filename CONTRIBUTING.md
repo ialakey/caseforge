@@ -52,6 +52,12 @@ be pointed at (`pnpm infra:up:scale`).
 - **The read client is for reads that tolerate lag.** `PRISMA_READ` may serve a
   report, the catalogue, the lobby or the drop feed; it must never serve what
   the player asking has just written, and nothing inside a transaction.
+- **Money is reported from the ledger, never from an analytics event.** The
+  event stream is for what the database cannot answer — arrivals, sources, page
+  views, abandoned clicks. A second source for a number that already exists is a
+  second number, and the ledger is the one that has to win.
+- **Appearance settings cannot reach the odds.** A new knob that changes what a
+  player can win belongs in its own group, not next to the palette.
 - New rules around openings, odds or payouts come with a test.
 
 ## Scope
