@@ -723,15 +723,116 @@ experience.
 ## 10. Load
 
 Traffic for sites like this is sharply uneven: an ordinary day, then a 20x spike
-during a streamer's giveaway. Capacity has to be planned off the spike.
+during a streamer's giveaway. Capacity has to be planned off the spike, and the
+plan has to be runnable — everything below is in the repository rather than in a
+future ticket, behind `pnpm infra:up:scale` and measured by `pnpm test:load`.
 
-Done up front:
-- **stateless API** — horizontal scaling behind a load balancer, state only in Postgres and Redis
-- **PgBouncer** in transaction mode: Node with a pool per instance burns through Postgres connections very fast
-- a **read replica** for storefronts and CRM reports, so a heavy report does not sit on the game core
-- **Redis** for prices, case configs, sessions and rate-limit counters
-- **queues** for everything that leaves the building (Steam, payments, webhooks) — an external API has no business holding a user's HTTP request open
-- **Cloudflare** in front of everything, with L7 protection mandatory
+### Connection pooling
+
+**PgBouncer in transaction mode.** Node keeps a connection pool per process, so
+Postgres's `max_connections` is spent by the number of API instances times their
+pool size, and it runs out long before the database is actually busy. Transaction
+pooling ties a server connection to a transaction rather than to a client, which
+turns a thousand idle application connections into a couple of dozen real ones.
+
+Two things have to be right for Prisma to live behind it. Prepared statements
+are per-session and a transaction pooler hands out a different session every
+time: pgbouncer has tracked them since 1.21, so `max_prepared_statements` is set
+on the pooler and `?pgbouncer=true` on the URL as the belt to that braces. And
+migrations must not go through it at all — they open long sessions, create types
+and take locks that transaction pooling cannot carry across statements — so the
+schema declares `directUrl`, which is where `DIRECT_DATABASE_URL` points. It
+defaults to `DATABASE_URL`, so a single-server deployment configures nothing.
+
+`connection_limit` in the URL is worth setting explicitly behind a pooler: a
+small pool per instance is the entire point, and Prisma's default of
+`cores * 2 + 1` per process is not.
+
+### The read replica
+
+A streaming standby, and a second Prisma client that points at it. Where
+`REPLICA_DATABASE_URL` is unset the read client *is* the primary client, so
+nothing branches on configuration and one box needs none.
+
+The rule for using it cannot be expressed as a type, so it is a rule: **the
+replica serves what an operator or a spectator reads, never what the player
+asking has just written.** Replication lag is small but real, and a read across
+it shows a player an inventory without the item they just won. What reads the
+replica: every CRM report and listing, the public catalogue, the battle lobby,
+the drop feed. What stays on the primary: anything inside a transaction, the
+inventory, the balance, and a single battle — the player who just took a seat is
+handed that very battle back.
+
+`pnpm infra:replica:init` prepares a **running** primary for a standby: a stock
+`postgres` container has neither a replication role nor a `pg_hba` line that
+admits one, and both have to be added without recreating a database that already
+holds a seeded catalogue. `pg_hba` needs an explicit `replication` entry —
+`all` in the database column is the one place where `all` does not mean all.
+
+### What is cached, and what deliberately is not
+
+The catalogue is the most requested read on the site and its answer is identical
+for everybody, so it is cached in Redis. Invalidation is by version counter
+rather than by deleting keys: the counter is part of every key in the namespace,
+bumping it orphans the namespace at once, and because the counter lives in Redis
+every API instance sees the bump. An operator saving a case, an RTP
+recalculation and the hourly price sync all bump it; the TTL is only the backstop
+for a bump that never arrived.
+
+The opening path does not read that cache. It loads the case inside its own
+transaction, because a stale price there is a stale amount of money.
+
+The drop feed keeps its own backlog as a Redis list, written as drops happen.
+Every socket that connects asks for the recent drops, and answering that from
+Postgres is a four-table join per connection — during the reconnect storm after
+a deploy, the most pointless load on the database on the whole site. The database
+is read only to warm the list.
+
+Settings are cached in-process for fifteen seconds, and a write clears the cache
+locally, so an operator sees their own change immediately and other instances
+within the TTL.
+
+### Indexes
+
+The ones that matter are on the ticket and price reads, not on the ledger: a
+contract's reward pool and the wheel's free-skin slice both ask for active items
+inside a price band that can span fiftyfold, and without `(isActive,
+marketPrice)` the planner walks the whole catalogue on every contract preview.
+`case_openings` carries its own composite indexes for the report aggregates and
+one for the battle view.
+
+### Health
+
+`GET /api/health` is what a balancer polls and what an operator opens first. It
+reports the reachability and latency of Postgres and Redis, and the replica's
+replay lag in seconds — because behind a balancer the interesting failure is not
+a dead process, which stops answering by itself, but an instance that answers
+happily while its replica is an hour behind. "Degraded" travels in the body
+rather than as a status code: a lagging replica is a reason to look, not a reason
+to take the instance out of rotation.
+
+### Load testing
+
+`pnpm test:load` is a dependency-free generator in the repository, with the
+site's own scenarios rather than a generic "hit / with 100 VUs":
+
+| Scenario | What it does |
+|---|---|
+| `browse` | public reads only — catalogue, case page, lobby, config, health |
+| `open` | the write path: one case opened per request, per throwaway player |
+| `battles` | two throwaway players create and fill a two-round battle |
+| `mixed` | four parts browse to one part open |
+
+It reports p50/p90/p99 and every non-2xx status separately, which matters more
+than it sounds: a run where a third of the requests are 429 is a rate-limit
+measurement, and reading it as latency is how people conclude a site is fast
+when it is refusing work. The throwaway players and everything they did are
+deleted afterwards.
+
+What the numbers are not: capacity. The generator shares the machine with the
+API and the database and competes with what it is measuring, so they are
+comparative — before and after a change — and a real figure needs load offered
+from somewhere else.
 
 Deferred until there are real numbers: sharding, splitting the game core out into
 Go, partitioning `case_openings` (needed somewhere past 50–100 million rows).
@@ -931,4 +1032,5 @@ fields already exist on `User`).
   market.csgo.com and through bots of our own.
 - **Stage 3 (done).** Case battles, promo codes, a referral system.
 - **Stage 4.** Payments, KYC, full CRM reporting.
-- **Stage 5.** Load testing, PgBouncer, replicas, tuning for the spike.
+- **Stage 5 (done).** Load testing, PgBouncer, a read replica, caching and
+  health checks — section 10.

@@ -26,7 +26,13 @@ pnpm format        # prettier
 
 `pnpm test:smoke` is the end-to-end pass. It needs the infrastructure up and the
 API running, and it is worth running for anything that touches money, openings
-or roles.
+or roles. `pnpm test:smoke:battles` covers case battles and referrals.
+
+`pnpm test:load` generates load against a running API — worth a before-and-after
+run for anything on a hot read path. Its numbers are comparative, not capacity:
+the generator shares the machine with what it measures. Section 10 of the
+architecture document describes the pooled-and-replicated setup it is meant to
+be pointed at (`pnpm infra:up:scale`).
 
 ## What the review looks for
 
@@ -43,6 +49,9 @@ or roles.
 - **Code and comments are in English.** Interface strings go in
   `packages/shared/src/i18n.ts` with both RU and EN, and server errors carry a
   machine-readable `code` alongside the message.
+- **The read client is for reads that tolerate lag.** `PRISMA_READ` may serve a
+  report, the catalogue, the lobby or the drop feed; it must never serve what
+  the player asking has just written, and nothing inside a transaction.
 - New rules around openings, odds or payouts come with a test.
 
 ## Scope

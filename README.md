@@ -106,6 +106,7 @@ pnpm test          # unit tests: provable fairness, ticket ranges, balancing, up
 pnpm typecheck     # every package
 pnpm test:smoke    # end-to-end run against a live API
 pnpm test:smoke:battles   # battles and referrals, same requirements
+pnpm test:load     # load generator, also against a live API
 ```
 
 `test:smoke` needs the infrastructure up and the API running. It covers what
@@ -388,6 +389,15 @@ Each seat pays the full list price, so a battle does not change the site's
 margin — the pot moves between the players, and the expected return is the
 weighted RTP of the cases in it.
 
+<p align="center">
+  <img src="docs/screenshots/en/battles.png" alt="The battle lobby: open battles with their mode, seats and entry price" width="900">
+</p>
+
+<p align="center">
+  <em>The lobby. A seat taken in another browser disappears from this one without a reload, and the host of a battle nobody joined can call it off.</em>
+</p>
+
+
 **Every drop in a battle is an ordinary case opening.** The roll comes from the
 opening player's own seed pair and their own nonce, so each player verifies their
 own drops in their profile with the same arithmetic as a solo opening; a battle
@@ -399,6 +409,15 @@ The last seat to be taken plays the whole battle out in one transaction, and the
 reels then play it back round by round. A tie is decided by the single best drop
 — the worst one in the crazy mode — and then by the earlier seat: both are
 functions of rolls already on the record.
+
+<p align="center">
+  <img src="docs/screenshots/en/battle.png" alt="A finished four-player battle with every drop, the totals and the winner" width="900">
+</p>
+
+<p align="center">
+  <em>A played battle. Every tile is an ordinary opening with its own roll and nonce, so each player can verify their own column in their profile.</em>
+</p>
+
 
 A battle nobody joins is cancelled by a sweeper after a configurable wait and
 every seat is refunded in full through the ledger, so the worst case for a host
@@ -454,6 +473,15 @@ player cannot use their own code, and a sign-up from the inviter's own address i
 flagged for an operator rather than refused, because a household shares an
 address. A refunded battle seat takes its commission back with it.
 
+<p align="center">
+  <img src="docs/screenshots/en/referral.png" alt="The referral page: the invite link, the code, what has accrued and who was invited" width="900">
+</p>
+
+<p align="center">
+  <em>Accrued and paid out are two different numbers, because commission sits in rows of its own until it is claimed.</em>
+</p>
+
+
 ---
 
 ## Runtime settings
@@ -471,7 +499,7 @@ rather than a deploy.
 </p>
 
 <p align="center">
-  <em>Each field is rendered from the registry, key and all — so a setting added in the shared package appears here with no change to the panel.</em>
+  <em>Each field is rendered from the registry, key and all — so a setting added in the shared package appears here with no change to the panel. The battle and referral groups arrived exactly that way.</em>
 </p>
 
 The form is generated from a registry declared once in
@@ -610,6 +638,54 @@ rate-limits offer creation.
 
 ---
 
+## Scaling and load
+
+Everyday development needs neither a connection pooler nor a replica, so
+`pnpm infra:up` starts Postgres and Redis and nothing else. The shape the site
+is meant to run under load lives behind a compose profile:
+
+```bash
+pnpm infra:replica:init    # prepares the running primary: replication role + pg_hba
+pnpm infra:up:scale        # adds PgBouncer (:6433) and a streaming replica (:5434)
+pnpm infra:replica:status  # who is streaming, and how far behind
+```
+
+Then point the API at them — the three lines are commented out in `.env.example`:
+
+```env
+DATABASE_URL="postgresql://csgo:csgo@localhost:6433/csgo_case?schema=public&pgbouncer=true&connection_limit=10"
+DIRECT_DATABASE_URL="postgresql://csgo:csgo@localhost:5433/csgo_case?schema=public"
+REPLICA_DATABASE_URL="postgresql://csgo:csgo@localhost:5434/csgo_case?schema=public"
+```
+
+**PgBouncer** runs in transaction mode: Node keeps a pool per process, so
+Postgres's connection limit is spent by instances times pool size long before
+the database is busy. Migrations bypass it through `DIRECT_DATABASE_URL`, because
+they open long sessions and take locks that transaction pooling cannot carry.
+
+**The replica** serves the reads that tolerate lag — CRM reports, the public
+catalogue, the battle lobby, the drop feed — and nothing a player has just
+written. With `REPLICA_DATABASE_URL` unset every read goes to the primary and no
+code path changes.
+
+**`GET /api/health`** reports Postgres, Redis and the replica's replay lag, for a
+load balancer and for whoever is on call.
+
+Load is generated from inside the repository, with no tool to install first:
+
+```bash
+pnpm test:load                                            # 20s of browsing, 50 concurrent
+pnpm test:load -- --scenario=mixed --concurrency=100 --duration=30
+pnpm test:load -- --scenario=battles --users=8
+```
+
+The generator shares the machine with the API and the database, so its numbers
+are comparative — before and after a change — rather than a capacity figure.
+Section 10 of the architecture document explains what is cached, what is
+deliberately not, and why.
+
+---
+
 ## Layout
 
 ```
@@ -631,9 +707,10 @@ apps/
     src/market/              the market.csgo.com account, for the back office
     src/admin/               CRM: reports, case builder, audit
     src/steam/               OpenID, the Steam market, price and image sync
-    src/common/              config, Prisma, Redis, FX rates, roles, nightly reconciliation
+    src/common/              config, Prisma, the read client, the Redis cache, health, roles, nightly reconciliation
     test/smoke.mjs           end-to-end run against a live API
     test/battle-smoke.mjs    battles and referrals against a live API
+    test/load.mjs            load generator: browse, open, battles, mixed
   bot/
     src/market-pool.ts       the market accounts: throttling, balances, whose turn it is
     src/market-processor.ts  buying on market.csgo.com and settling a request
@@ -649,6 +726,10 @@ apps/
     src/app/admin/cases/     case list and builder
     src/components/          drop feed, opening reel, cards, switches
     src/lib/                 API client, auth store, settings store, socket
+tools/
+  infra/
+    init-replication.mjs   prepares a running primary for a standby
+    replica-status.mjs     who is streaming, and how far behind
 packages/
   shared/
     src/i18n.ts              interface dictionary, RU and EN
