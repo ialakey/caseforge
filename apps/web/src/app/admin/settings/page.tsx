@@ -10,6 +10,7 @@ import {
   translateError,
   translateSetting,
 } from '@caseforge/shared';
+import Link from 'next/link';
 import { api, ApiError } from '../../../lib/api';
 import { useSettings } from '../../../lib/settings';
 
@@ -20,6 +21,7 @@ interface SettingsPayload {
 
 const GROUP_TITLES: Record<SettingGroup, TranslationKey> = {
   site: 'admin.settings.group.site',
+  appearance: 'admin.settings.group.appearance',
   deposits: 'admin.settings.group.deposits',
   economy: 'admin.settings.group.economy',
   limits: 'admin.settings.group.limits',
@@ -93,13 +95,13 @@ export default function AdminSettingsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Settings</h1>
+        <h1 className="text-2xl font-semibold">{t('admin.settings.title')}</h1>
         <button
           onClick={() => void save()}
           disabled={!dirty || busy}
           className="cf-btn-primary px-5 py-2 text-sm"
         >
-          {busy ? 'Saving...' : 'Save'}
+          {busy ? t('common.saving') : t('common.save')}
         </button>
       </div>
 
@@ -118,7 +120,17 @@ export default function AdminSettingsPage() {
 
         return (
           <section key={group} className="cf-panel p-5">
-            <h2 className="mb-4 font-medium">{t(GROUP_TITLES[group])}</h2>
+            <h2 className="mb-1 font-medium">{t(GROUP_TITLES[group])}</h2>
+            {/* The appearance keys are ordinary settings and render here like
+                any others, but filling in thirty-nine of them down a single
+                column is not how anybody wants to design a site. */}
+            {group === 'appearance' && (
+              <p className="mb-4 text-xs text-ink-muted">
+                <Link href="/admin/appearance" className="text-accent hover:underline">
+                  {t('admin.settings.appearanceLink')}
+                </Link>
+              </p>
+            )}
             <div className="space-y-4">
               {keys.map((key) => (
                 <Field
@@ -191,6 +203,23 @@ function Field({
         </div>
       ) : def.kind === 'json' ? (
         <JsonField value={value} onChange={onChange} />
+      ) : def.kind === 'color' ? (
+        <ColorField value={String(value ?? '')} onChange={onChange} />
+      ) : def.kind === 'text' ? (
+        <textarea
+          value={String(value ?? '')}
+          rows={3}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg border border-edge-subtle bg-surface-overlay px-3 py-2 text-sm outline-none focus:border-accent/60"
+        />
+      ) : def.kind === 'string' || def.kind === 'url' ? (
+        <input
+          type="text"
+          value={String(value ?? '')}
+          placeholder={def.kind === 'url' ? 'https://…' : undefined}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg border border-edge-subtle bg-surface-overlay px-3 py-2 text-sm outline-none focus:border-accent/60"
+        />
       ) : (
         <input
           type="number"
@@ -244,6 +273,39 @@ function JsonField({ value, onChange }: { value: unknown; onChange: (value: unkn
         }`}
       />
       {invalid && <p className="mt-1 text-xs text-negative">Not valid JSON yet</p>}
+    </div>
+  );
+}
+
+/**
+ * A colour, picked or typed.
+ *
+ * Both, because the two ways of arriving at a colour are different jobs: a
+ * brand palette is pasted as a hex string, and a shade is nudged with the
+ * picker. The text box is the source of truth — it accepts what the server
+ * accepts — and the swatch is what makes a wrong value obvious immediately.
+ */
+function ColorField({ value, onChange }: { value: string; onChange: (value: unknown) => void }) {
+  const valid = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value.trim());
+
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        type="color"
+        value={valid ? value : '#000000'}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-9 w-12 cursor-pointer rounded border border-edge-subtle bg-surface-overlay"
+        aria-label="colour picker"
+      />
+      <input
+        type="text"
+        value={value}
+        spellCheck={false}
+        onChange={(e) => onChange(e.target.value)}
+        className={`w-full rounded-lg border bg-surface-overlay px-3 py-2 font-mono text-sm outline-none ${
+          valid ? 'border-edge-subtle focus:border-accent/60' : 'border-negative'
+        }`}
+      />
     </div>
   );
 }

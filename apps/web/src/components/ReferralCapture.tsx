@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { REFERRAL_QUERY_PARAM, normaliseReferralCode } from '@caseforge/shared';
 import { api } from '../lib/api';
+import { AnalyticsEventType, track } from '../lib/analytics';
 import { useAuth } from '../lib/store';
 
 const STORAGE_KEY = 'referral_code';
@@ -30,6 +31,7 @@ export function ReferralCapture() {
       if (!code) return;
 
       window.localStorage.setItem(STORAGE_KEY, normaliseReferralCode(code));
+      track(AnalyticsEventType.REFERRAL_VISIT, { code: normaliseReferralCode(code) });
 
       // Take the parameter back out of the address bar: the visitor is about
       // to share or bookmark whatever is in it, and an invite that travels on

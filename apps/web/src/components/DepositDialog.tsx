@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { DEPOSIT_PRESETS, translateError } from '@caseforge/shared';
 import { api, ApiError } from '../lib/api';
+import { AnalyticsEventType, track } from '../lib/analytics';
 import { useAuth } from '../lib/store';
 import { useSettings } from '../lib/settings';
 import { useMoneyFormatter } from './Money';
@@ -45,6 +46,9 @@ export function DepositDialog({ onClose }: { onClose: () => void }) {
   async function applyPromo(): Promise<void> {
     const code = promoDraft.trim();
     if (code === '') return;
+    // A code that was typed and refused is how a promotion is found to have
+    // been mis-shared, and nothing in the database records an attempt.
+    track(AnalyticsEventType.PROMO_TRIED, { code: code.slice(0, 32) });
     setCheckingPromo(true);
     setPromoError(null);
     try {

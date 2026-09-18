@@ -16,6 +16,7 @@ import {
   translateError,
 } from '@caseforge/shared';
 import { api, ApiError, loginUrl } from '../../lib/api';
+import { AnalyticsEventType, track } from '../../lib/analytics';
 import { useAuth } from '../../lib/store';
 import { useSettings } from '../../lib/settings';
 import { getSocket } from '../../lib/socket';
@@ -121,6 +122,9 @@ export default function BattlesPage() {
 
   async function create(): Promise<void> {
     if (picked.length === 0 || busy) return;
+    // Reported before the request, so a battle somebody could not afford still
+    // counts as intent — that gap is the interesting number.
+    track(AnalyticsEventType.BATTLE_INTENT, { action: 'create', rounds, slots });
     setBusy(true);
     setError(null);
     try {
@@ -142,6 +146,7 @@ export default function BattlesPage() {
 
   async function join(battleId: string): Promise<void> {
     if (busy) return;
+    track(AnalyticsEventType.BATTLE_INTENT, { action: 'join' });
     setBusy(true);
     setError(null);
     try {

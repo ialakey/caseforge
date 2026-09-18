@@ -21,7 +21,18 @@ import { PriceBandFilter } from './PriceBandFilter';
  * feel worth using. The component is still rendered on the server with the
  * full list, so the markup a crawler sees is the whole catalogue.
  */
-export function CaseCatalogue({ cases }: { cases: CaseView[] }) {
+export function CaseCatalogue({
+  cases,
+  /**
+   * On a small catalogue the filters outnumber the cases, so whether they
+   * appear at all is an operator's decision. The list itself is unaffected —
+   * hiding the controls resets nothing.
+   */
+  showFilters = true,
+}: {
+  cases: CaseView[];
+  showFilters?: boolean;
+}) {
   const t = useT();
   const [query, setQuery] = useState('');
   const [band, setBand] = useState<PriceBandKey>('all');
@@ -56,33 +67,35 @@ export function CaseCatalogue({ cases }: { cases: CaseView[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t('common.search')}
-          aria-label={t('common.search')}
-          className="min-w-[200px] flex-1 rounded-lg border border-edge-subtle bg-surface-overlay px-3 py-1.5 text-sm outline-none transition placeholder:text-ink-faint focus:border-edge-strong"
-        />
-        {filtered && (
-          <>
-            <span className="text-xs text-ink-faint">
-              {t('home.caseMatches', { shown: visible.length, total: cases.length })}
-            </span>
-            <button
-              onClick={() => {
-                setQuery('');
-                setBand('all');
-              }}
-              className="cf-chip px-3 py-1.5"
-            >
-              {t('home.resetFilters')}
-            </button>
-          </>
-        )}
-      </div>
+      {showFilters && (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t('common.search')}
+            aria-label={t('common.search')}
+            className="min-w-[200px] flex-1 rounded-lg border border-edge-subtle bg-surface-overlay px-3 py-1.5 text-sm outline-none transition placeholder:text-ink-faint focus:border-edge-strong"
+          />
+          {filtered && (
+            <>
+              <span className="text-xs text-ink-faint">
+                {t('home.caseMatches', { shown: visible.length, total: cases.length })}
+              </span>
+              <button
+                onClick={() => {
+                  setQuery('');
+                  setBand('all');
+                }}
+                className="cf-chip px-3 py-1.5"
+              >
+                {t('home.resetFilters')}
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
-      <PriceBandFilter value={band} onChange={setBand} counts={counts} />
+      {showFilters && <PriceBandFilter value={band} onChange={setBand} counts={counts} />}
 
       {visible.length === 0 ? (
         <p className="text-ink-faint">{t('home.noMatches')}</p>

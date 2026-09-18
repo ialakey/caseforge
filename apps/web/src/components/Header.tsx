@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { type FxRates, WS_EVENTS } from '@caseforge/shared';
+import { type AppearanceConfig, type FxRates, WS_EVENTS } from '@caseforge/shared';
 import { api, loginUrl } from '../lib/api';
+import { AnalyticsEventType, track } from '../lib/analytics';
 import { useAuth } from '../lib/store';
 import { useSettings } from '../lib/settings';
 import { getSocket } from '../lib/socket';
@@ -18,7 +19,15 @@ interface PublicConfig {
   fxRates: FxRates;
 }
 
-export function Header() {
+/**
+ * The appearance arrives as a prop from the server layout rather than being
+ * fetched here.
+ *
+ * The header is the first thing painted and it carries the site's name: a
+ * client fetch would render "CaseForge" and then swap it for whatever the
+ * operator called the site, on every page load.
+ */
+export function Header({ appearance }: { appearance: AppearanceConfig }) {
   const { user, loading, loadUser, setBalance, logout } = useAuth();
   const { t, hydrate, setFxRates } = useSettings();
   const [depositsEnabled, setDepositsEnabled] = useState(false);
@@ -60,20 +69,36 @@ export function Header() {
           and the balance has to stay reachable while they do. */}
       <header className="sticky top-0 z-40 border-b border-edge-subtle bg-surface-base/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center gap-5 px-4 py-3">
-          <Link href="/" className="text-lg font-bold tracking-tight">
-            Case<span className="text-accent">Forge</span>
+          <Link href="/" className="flex items-center gap-2 text-lg font-bold tracking-tight">
+            {appearance.logoUrl ? (
+              <img src={appearance.logoUrl} alt={appearance.siteName} className="h-7 w-auto" />
+            ) : (
+              // The wordmark splits the name in two and accents the tail, which
+              // is what the default "CaseForge" did by hand. A one-word name
+              // simply keeps its colour.
+              <span>
+                {appearance.siteName.slice(0, Math.ceil(appearance.siteName.length / 2))}
+                <span className="text-accent">
+                  {appearance.siteName.slice(Math.ceil(appearance.siteName.length / 2))}
+                </span>
+              </span>
+            )}
           </Link>
 
           {/* The profile is gone from the left menu: it lives on the right, on the avatar. */}
           <nav className="flex gap-1 text-sm">
             <NavLink href="/">{t('nav.cases')}</NavLink>
-            <NavLink href="/battles">{t('nav.battles')}</NavLink>
-            <NavLink href="/upgrade">{t('nav.upgrade')}</NavLink>
-            <NavLink href="/contract">{t('nav.contract')}</NavLink>
-            <NavLink href="/bonus">{t('nav.bonus')}</NavLink>
+            {/* Which sections exist at all is an operator's decision: a site
+                that has switched battles off should not advertise them. */}
+            {appearance.nav.battles && <NavLink href="/battles">{t('nav.battles')}</NavLink>}
+            {appearance.nav.upgrade && <NavLink href="/upgrade">{t('nav.upgrade')}</NavLink>}
+            {appearance.nav.contract && <NavLink href="/contract">{t('nav.contract')}</NavLink>}
+            {appearance.nav.bonus && <NavLink href="/bonus">{t('nav.bonus')}</NavLink>}
             {/* The referral page is only useful with a code on it, and a code
                 only exists for somebody signed in. */}
-            {user && <NavLink href="/referral">{t('nav.referral')}</NavLink>}
+            {user && appearance.nav.referral && (
+              <NavLink href="/referral">{t('nav.referral')}</NavLink>
+            )}
             {isStaff && <NavLink href="/admin">{t('nav.crm')}</NavLink>}
           </nav>
 
@@ -88,7 +113,10 @@ export function Header() {
                   <Money value={user.balance} className="px-3 py-1.5 font-semibold text-accent" />
                   {depositsEnabled && (
                     <button
-                      onClick={() => setDepositOpen(true)}
+                      onClick={() => {
+                        track(AnalyticsEventType.DEPOSIT_OPENED);
+                        setDepositOpen(true);
+                      }}
                       aria-label={t('nav.topUp')}
                       title={t('nav.topUp')}
                       className="h-full border-l border-edge-subtle bg-positive/15 px-3 py-1.5 font-semibold text-positive transition hover:bg-positive/25"
@@ -117,7 +145,15 @@ export function Header() {
                 </button>
               </>
             ) : (
-              <a href={loginUrl} className="cf-btn-primary px-4 py-2">
+              <a
+                href={loginUrl}
+                // The last thing we see before the Steam redirect takes the
+                // visitor away, and therefore the bottom of the anonymous
+                // funnel: without it, everyone who bounces at the sign-in and
+                // everyone who never tried look the same in a report.
+                onClick={() => track(AnalyticsEventType.SIGN_IN_STARTED)}
+                className="cf-btn-primary px-4 py-2"
+              >
                 {t('nav.signIn')}
               </a>
             )}

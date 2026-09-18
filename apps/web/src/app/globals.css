@@ -33,6 +33,19 @@
 
   --positive: 152 69% 45%;
   --negative: 0 72% 58%;
+
+  /*
+   * Shape and glow are configuration too.
+   *
+   * Both are declared here with the values the project ships with, and both are
+   * overridden by the appearance settings through an inline style on :root. A
+   * component that hard-coded `rounded-xl` would be a component that ignores
+   * the operator, so the panels, buttons and inputs read the radius from here.
+   * --glow-strength is a multiplier rather than a switch: it scales every halo
+   * at once, and 0 turns the site flat without a second set of rules.
+   */
+  --radius: 12px;
+  --glow-strength: 1;
 }
 
 body {
@@ -56,7 +69,8 @@ body {
   .cf-panel {
     background-color: hsl(var(--surface-raised) / 0.75);
     border: 1px solid hsl(var(--border-subtle));
-    @apply rounded-xl backdrop-blur-sm;
+    border-radius: var(--radius);
+    @apply backdrop-blur-sm;
   }
 
   /* The primary action. Gold, because it is always about money. */
@@ -66,8 +80,9 @@ body {
       hsl(var(--accent)),
       hsl(var(--accent-strong))
     );
-    @apply rounded-lg font-semibold text-neutral-950 shadow-lg transition;
-    box-shadow: 0 6px 20px -8px hsl(var(--accent) / 0.8);
+    border-radius: calc(var(--radius) * 0.7);
+    @apply font-semibold text-neutral-950 transition;
+    box-shadow: 0 6px 20px -8px hsl(var(--accent) / calc(0.8 * var(--glow-strength)));
   }
   .cf-btn-primary:hover:not(:disabled) {
     filter: brightness(1.08);
@@ -83,7 +98,8 @@ body {
     background-color: hsl(var(--surface-overlay));
     border: 1px solid hsl(var(--border-subtle));
     color: hsl(var(--text-primary));
-    @apply rounded-lg font-medium transition;
+    border-radius: calc(var(--radius) * 0.7);
+    @apply font-medium transition;
   }
   .cf-btn-ghost:hover:not(:disabled) {
     background-color: hsl(var(--surface-hover));

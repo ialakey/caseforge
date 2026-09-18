@@ -4,6 +4,7 @@ import { CatalogueHeadings } from '../components/CatalogueHeadings';
 import { BonusTeaser } from '../components/BonusTeaser';
 import { Hero } from '../components/Hero';
 import { LiveDrops } from '../components/LiveDrops';
+import { getPublicConfig } from '../lib/public-config';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 
@@ -16,7 +17,11 @@ async function loadCases(): Promise<CaseView[]> {
 }
 
 export default async function HomePage() {
-  const cases = await loadCases();
+  // Both on the server, and the configuration is the same request the layout
+  // already made. Deciding here rather than inside each component is what
+  // stops a section the operator switched off from rendering and then
+  // disappearing on the first client paint.
+  const [cases, { appearance }] = await Promise.all([loadCases(), getPublicConfig()]);
 
   // Counted from the catalogue that was just fetched rather than from a second
   // endpoint: the banner is decoration, and it must not cost a round trip or
@@ -25,13 +30,18 @@ export default async function HomePage() {
 
   return (
     <div className="space-y-10">
-      <Hero caseCount={cases.length} itemCount={distinctItems} />
+      {appearance.hero.enabled && (
+        <Hero caseCount={cases.length} itemCount={distinctItems} appearance={appearance} />
+      )}
 
       {/* Right under the banner: a player who has a spin waiting should not
           have to find the bonus page to learn that. */}
-      <BonusTeaser />
+      {appearance.home.bonusTeaser && <BonusTeaser />}
 
-      <CatalogueHeadings drops={<LiveDrops />} catalogue={<CaseCatalogue cases={cases} />} />
+      <CatalogueHeadings
+        drops={appearance.home.dropFeed ? <LiveDrops /> : null}
+        catalogue={<CaseCatalogue cases={cases} showFilters={appearance.home.caseFilters} />}
+      />
     </div>
   );
 }

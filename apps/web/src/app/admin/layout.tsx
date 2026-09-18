@@ -15,6 +15,8 @@ import { useSettings } from '../../lib/settings';
  */
 const TABS: Array<{ href: string; label: TranslationKey }> = [
   { href: '/admin', label: 'admin.nav.dashboard' },
+  { href: '/admin/analytics', label: 'admin.nav.analytics' },
+  { href: '/admin/appearance', label: 'admin.nav.appearance' },
   { href: '/admin/cases', label: 'admin.nav.cases' },
   { href: '/admin/promo', label: 'admin.nav.promo' },
   { href: '/admin/market', label: 'admin.nav.market' },
