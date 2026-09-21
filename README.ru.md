@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/ialakey/caseforge/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/ialakey/caseforge/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
+  <a href="LICENSE"><img alt="Лицензия: PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/%D0%BB%D0%B8%D1%86%D0%B5%D0%BD%D0%B7%D0%B8%D1%8F-PolyForm%20Noncommercial%201.0.0-blue.svg"></a>
   <img alt="Node" src="https://img.shields.io/badge/node-%E2%89%A522-339933?logo=node.js&logoColor=white">
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white">
   <a href="README.md"><img alt="English version" src="https://img.shields.io/badge/README-english-informational"></a>
