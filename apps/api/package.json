@@ -35,7 +35,8 @@
     "seed:catalogue": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/seed-catalogue.js",
     "rebalance-cases": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/rebalance-cases.js",
     "refresh-profile": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/refresh-profile.js",
-    "grant-admin": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/grant-admin.js"
+    "grant-admin": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/grant-admin.js",
+    "align-ledger": "tsc -p tsconfig.scripts.json && node dist-scripts/scripts/align-ledger.js"
   },
   "dependencies": {
     "@caseforge/shared": "workspace:*",
