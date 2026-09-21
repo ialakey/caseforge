@@ -36,9 +36,14 @@ function createClient(role: string): Redis {
 @Global()
 @Module({
   providers: [
-    { provide: REDIS_CLIENT, useFactory: createClient },
-    { provide: REDIS_PUBLISHER, useFactory: createClient },
-    { provide: REDIS_SUBSCRIBER, useFactory: createClient },
+    // Each factory is wrapped rather than passed bare: Nest calls a factory
+    // with its injected dependencies, and `createClient` has none — so handing
+    // it over directly would call it with no arguments and label every one of
+    // the three connections `[undefined]`, which is the one thing the role was
+    // added to prevent.
+    { provide: REDIS_CLIENT, useFactory: () => createClient('cache') },
+    { provide: REDIS_PUBLISHER, useFactory: () => createClient('publisher') },
+    { provide: REDIS_SUBSCRIBER, useFactory: () => createClient('subscriber') },
   ],
   exports: [REDIS_CLIENT, REDIS_PUBLISHER, REDIS_SUBSCRIBER],
 })
