@@ -202,24 +202,34 @@ export class ItemDepositsService {
    *
    * Only while nothing has been handed over. Once a bot holds the skins the
    * player is owed money, and "cancel" would mean keeping both.
+   *
+   * The cancellable statuses are named in the UPDATE rather than checked first
+   * and written afterwards, because the worker is moving this row at the same
+   * time. Between a check and an unconditional write the offer can be accepted,
+   * and the row would go to CANCELLED with the skins already in a bot's
+   * inventory — which the crediting sweep only looks for in ACCEPTED rows, so
+   * the player would have handed over their items for nothing.
    */
   async cancel(userId: string, depositId: string): Promise<ItemDepositView> {
     const deposit = await this.prisma.itemDeposit.findFirst({
       where: { id: depositId, userId },
-      include: { items: { include: { item: true } } },
+      select: { id: true },
     });
     if (!deposit) throw notFound(ErrorCode.VALIDATION_FAILED, 'No such deposit');
 
-    if (deposit.status !== 'PENDING' && deposit.status !== 'OFFER_SENT') {
+    const cancelled = await this.prisma.itemDeposit.updateMany({
+      where: { id: deposit.id, userId, status: { in: ['PENDING', 'OFFER_SENT'] } },
+      data: { status: 'CANCELLED', completedAt: new Date() },
+    });
+    if (cancelled.count === 0) {
       throw badRequest(
         ErrorCode.VALIDATION_FAILED,
         'This deposit can no longer be cancelled — decline the trade offer in Steam instead',
       );
     }
 
-    const updated = await this.prisma.itemDeposit.update({
+    const updated = await this.prisma.itemDeposit.findUniqueOrThrow({
       where: { id: deposit.id },
-      data: { status: 'CANCELLED', completedAt: new Date() },
       include: { items: { include: { item: true } } },
     });
     return this.toView(updated);
