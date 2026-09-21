@@ -47,6 +47,13 @@ export class PaymentsController {
    * 401 on a signature that does not check out, and 200 on anything that
    * verifies — including notifications this site does not act on. A provider
    * reads a 4xx as "try again tomorrow".
+   *
+   * `rawBody` is put there by the JSON parser in `main.ts`, which keeps the
+   * bytes for this route and no other. Falling back to re-serialising the
+   * parsed object would be worse than having nothing: it verifies for the
+   * simplest payloads and then fails on the first provider that orders its
+   * keys differently or escapes a non-ASCII character, which is a signature
+   * check that only appears to work.
    */
   @Public()
   @Post('webhook/:provider')
@@ -56,7 +63,8 @@ export class PaymentsController {
     @Headers() headers: Record<string, string>,
     @Req() request: FastifyRequest & { rawBody?: string },
   ): Promise<{ received: true }> {
-    const rawBody = request.rawBody ?? JSON.stringify(request.body ?? {});
+    const rawBody = request.rawBody;
+    if (rawBody === undefined) throw new UnauthorizedException('Webhook rejected');
     const { ok } = await this.payments.handleWebhook(provider, headers, rawBody);
     if (!ok) throw new UnauthorizedException('Webhook rejected');
     return { received: true };

@@ -36,6 +36,24 @@ const KYC_BODY_LIMIT = 12 * 1024 * 1024;
 const KYC_ROUTE = '/api/kyc';
 
 /**
+ * The routes whose exact bytes have to survive parsing.
+ *
+ * A payment provider signs the body it sent, so verifying that signature means
+ * hashing those bytes and not a re-serialisation of the object they parsed
+ * into: key order, spacing and how a provider escapes a non-ASCII character
+ * are all things `JSON.stringify` is free to decide differently.
+ *
+ * Kept to a prefix rather than applied everywhere, because holding the raw
+ * string as well as the parsed object doubles what a request costs in memory
+ * — and the one route allowed a twelve-megabyte body is the KYC upload, which
+ * has no signature to check.
+ */
+const RAW_BODY_PREFIX = '/api/payments/webhook/';
+
+/** A request that kept the bytes it arrived as. */
+type RawBodyRequest = { url?: string; rawBody?: string };
+
+/**
  * By default Fastify answers 400 to a POST with Content-Type: application/json
  * and an empty body. That hits every payload-less endpoint — seed rotation,
  * withdrawal cancellation, logout — while a typical front-end client sets that
@@ -47,7 +65,8 @@ function overrideJsonBodyParser(app: NestFastifyApplication): void {
   instance.addContentTypeParser(
     'application/json',
     { parseAs: 'string' },
-    (_req, body: string, done) => {
+    (request: RawBodyRequest, body: string, done) => {
+      if (request.url?.startsWith(RAW_BODY_PREFIX)) request.rawBody = body;
       if (body === '') return done(null, {});
       try {
         done(null, JSON.parse(body));
