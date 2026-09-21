@@ -45,6 +45,23 @@ const args = Object.fromEntries(
 );
 
 const API = args.api ?? 'http://localhost:4000';
+
+/**
+ * The cheapest case a player can actually buy.
+ *
+ * Not simply the cheapest: a free case is priced at 0 and therefore sorts
+ * first, but it is rationed by a deposit threshold and a 24-hour opening limit
+ * rather than by a price. Opening one here is refused outright, and a battle
+ * built from one has an entry price of nothing — which is a wager no
+ * commission can be a share of.
+ */
+function cheapestPaid(cases) {
+  const paid = cases.filter((c) => c.price > 0 && !c.free);
+  if (paid.length === 0) {
+    throw new Error('No purchasable case in the catalogue — run pnpm seed:cases');
+  }
+  return paid.reduce((a, b) => (a.price <= b.price ? a : b));
+}
 const SCENARIO = args.scenario ?? 'browse';
 const CONCURRENCY = Number(args.concurrency ?? 50);
 const DURATION_SEC = Number(args.duration ?? 20);
@@ -199,7 +216,11 @@ if (!Array.isArray(cases) || cases.length === 0) {
   console.error('No cases in the catalogue — run pnpm seed:cases');
   process.exit(1);
 }
-const cheapest = [...cases].sort((a, b) => a.price - b.price)[0];
+// The cheapest case a player can actually buy. Free cases sit at price 0 and
+// therefore sort first, but they are rationed by a deposit threshold and a
+// 24-hour opening limit instead of by a price — so opening one is refused
+// here, and a battle built from one has an entry price of nothing to measure.
+const cheapest = cheapestPaid(cases);
 
 async function browseOnce() {
   const pick = Math.random();

@@ -21,6 +21,23 @@ config({ path: path.join(import.meta.dirname, '../../../.env') });
 
 const API = 'http://localhost:4000';
 
+/**
+ * The cheapest case a player can actually buy.
+ *
+ * Not simply the cheapest: a free case is priced at 0 and therefore sorts
+ * first, but it is rationed by a deposit threshold and a 24-hour opening limit
+ * rather than by a price. Opening one here is refused outright, and a battle
+ * built from one has an entry price of nothing — which is a wager no
+ * commission can be a share of.
+ */
+function cheapestPaid(cases) {
+  const paid = cases.filter((c) => c.price > 0 && !c.free);
+  if (paid.length === 0) {
+    throw new Error('No purchasable case in the catalogue — run pnpm seed:cases');
+  }
+  return paid.reduce((a, b) => (a.price <= b.price ? a : b));
+}
+
 /** HS256 by hand — see the note in smoke.mjs. */
 function signJwt(payload, secret, ttlSeconds = 900) {
   const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
@@ -43,7 +60,19 @@ function assert(cond, msg) {
   }
 }
 
-const admin = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
+/**
+ * The administrator these checks run as.
+ *
+ * Ordered, because `findFirst` without one is whatever Postgres hands back
+ * first — and a deployment that has promoted a second admin then gets a
+ * different account on each run. A suite that reconciles a balance against a
+ * ledger has to look at the same account every time, or it passes and fails at
+ * random for reasons that have nothing to do with the code.
+ */
+const admin = await prisma.user.findFirst({
+  where: { role: 'ADMIN' },
+  orderBy: { createdAt: 'asc' },
+});
 if (!admin) throw new Error('No administrator — run pnpm db:seed');
 const token = signJwt(
   { sub: admin.id, steamId64: admin.steamId64, role: admin.role },
@@ -111,7 +140,7 @@ console.log('\n4. A saved setting changes the behaviour it configures');
   await saveSettings({ 'economy.sellFeeBps': 1000 });
 
   const cases = await (await fetch(`${API}/api/cases`)).json();
-  const cheapest = [...cases].sort((a, b) => a.price - b.price)[0];
+  const cheapest = cheapestPaid(cases);
   await post('/api/cases/open', { caseId: cheapest.id, count: 1 });
 
   const inventory = await get('/api/inventory?filter=available');
@@ -134,7 +163,13 @@ console.log('\n5. Maintenance mode stops play without stopping sign-in');
 {
   await saveSettings({ 'site.maintenance': true });
   const cases = await (await fetch(`${API}/api/cases`)).json();
-  const res = await post('/api/cases/open', { caseId: cases[0].id, count: 1 });
+  // A purchasable case, because the second half of this check needs the
+  // opening to succeed: the catalogue leads with free cases, and those are
+  // refused by their own deposit gate whatever maintenance mode says. The
+  // maintenance refusal would still read as correct — it is checked first —
+  // and the resumption would then fail for an unrelated reason.
+  const target = cheapestPaid(cases);
+  const res = await post('/api/cases/open', { caseId: target.id, count: 1 });
   const body = await res.json();
   assert(res.status === 400, `opening refused with ${res.status}`);
   assert(body.code === 'MAINTENANCE', `refused as ${body.code}`);
@@ -143,7 +178,7 @@ console.log('\n5. Maintenance mode stops play without stopping sign-in');
   assert(me.status === 200, 'the profile still loads during maintenance');
 
   await saveSettings({ 'site.maintenance': false });
-  const reopened = await post('/api/cases/open', { caseId: cases[0].id, count: 1 });
+  const reopened = await post('/api/cases/open', { caseId: target.id, count: 1 });
   assert(reopened.status === 201 || reopened.status === 200, 'and play resumes when it is off');
 }
 

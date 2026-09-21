@@ -42,7 +42,19 @@ function assert(cond, msg) {
   }
 }
 
-const user = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
+/**
+ * The administrator these checks run as.
+ *
+ * Ordered, because `findFirst` without one is whatever Postgres hands back
+ * first — and a deployment that has promoted a second admin then gets a
+ * different account on each run. A suite that reconciles a balance against a
+ * ledger has to look at the same account every time, or it passes and fails at
+ * random for reasons that have nothing to do with the code.
+ */
+const user = await prisma.user.findFirst({
+  where: { role: 'ADMIN' },
+  orderBy: { createdAt: 'asc' },
+});
 if (!user) throw new Error('No administrator — run pnpm db:seed');
 const token = signJwt(
   { sub: user.id, steamId64: user.steamId64, role: user.role },

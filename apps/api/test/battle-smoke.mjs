@@ -21,6 +21,23 @@ config({ path: path.join(import.meta.dirname, '../../../.env') });
 
 const API = 'http://localhost:4000';
 
+/**
+ * The cheapest case a player can actually buy.
+ *
+ * Not simply the cheapest: a free case is priced at 0 and therefore sorts
+ * first, but it is rationed by a deposit threshold and a 24-hour opening limit
+ * rather than by a price. Opening one here is refused outright, and a battle
+ * built from one has an entry price of nothing — which is a wager no
+ * commission can be a share of.
+ */
+function cheapestPaid(cases) {
+  const paid = cases.filter((c) => c.price > 0 && !c.free);
+  if (paid.length === 0) {
+    throw new Error('No purchasable case in the catalogue — run pnpm seed:cases');
+  }
+  return paid.reduce((a, b) => (a.price <= b.price ? a : b));
+}
+
 /** HS256 by hand — see the note in smoke.mjs. */
 function signJwt(payload, secret, ttlSeconds = 900) {
   const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
@@ -99,7 +116,7 @@ const cases = await (await fetch(`${API}/api/cases`)).json();
 if (!Array.isArray(cases) || cases.length === 0) {
   throw new Error('No cases in the catalogue — run pnpm seed:cases');
 }
-const cheapest = [...cases].sort((a, b) => a.price - b.price)[0];
+const cheapest = cheapestPaid(cases);
 const ROUNDS = 2;
 const entryPrice = cheapest.price * ROUNDS;
 

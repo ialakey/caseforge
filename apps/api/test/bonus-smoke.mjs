@@ -28,6 +28,23 @@ config({ path: path.join(import.meta.dirname, '../../../.env') });
 
 const API = 'http://localhost:4000';
 
+/**
+ * The cheapest case a player can actually buy.
+ *
+ * Not simply the cheapest: a free case is priced at 0 and therefore sorts
+ * first, but it is rationed by a deposit threshold and a 24-hour opening limit
+ * rather than by a price. Opening one here is refused outright, and a battle
+ * built from one has an entry price of nothing — which is a wager no
+ * commission can be a share of.
+ */
+function cheapestPaid(cases) {
+  const paid = cases.filter((c) => c.price > 0 && !c.free);
+  if (paid.length === 0) {
+    throw new Error('No purchasable case in the catalogue — run pnpm seed:cases');
+  }
+  return paid.reduce((a, b) => (a.price <= b.price ? a : b));
+}
+
 /** HS256 by hand — see the note in smoke.mjs. */
 function signJwt(payload, secret, ttlSeconds = 900) {
   const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
@@ -50,7 +67,19 @@ function assert(cond, msg) {
   }
 }
 
-const user = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
+/**
+ * The administrator these checks run as.
+ *
+ * Ordered, because `findFirst` without one is whatever Postgres hands back
+ * first — and a deployment that has promoted a second admin then gets a
+ * different account on each run. A suite that reconciles a balance against a
+ * ledger has to look at the same account every time, or it passes and fails at
+ * random for reasons that have nothing to do with the code.
+ */
+const user = await prisma.user.findFirst({
+  where: { role: 'ADMIN' },
+  orderBy: { createdAt: 'asc' },
+});
 if (!user) throw new Error('No administrator — run pnpm db:seed');
 const token = signJwt(
   { sub: user.id, steamId64: user.steamId64, role: user.role },
@@ -192,7 +221,7 @@ console.log('\n7. A voucher is spent by an opening, once, for the right amount')
   const voucher = await giveVoucher('DISCOUNT', 'discount-50', 5000);
 
   const cases = await (await fetch(`${API}/api/cases`)).json();
-  const target = [...cases].sort((a, b) => a.price - b.price)[0];
+  const target = cheapestPaid(cases);
   const expectedSaving = voucherSaving(BonusKind.DISCOUNT, 5000, target.price, 1);
 
   const before = (await prisma.user.findUnique({ where: { id: user.id } })).balance;
@@ -237,7 +266,7 @@ console.log('\n7b. With several vouchers open, the most valuable one is spent');
 {
   await clearVouchers();
   const cases = await (await fetch(`${API}/api/cases`)).json();
-  const target = [...cases].sort((a, b) => a.price - b.price)[0];
+  const target = cheapestPaid(cases);
 
   // A free opening of this case is worth its full price; a tenth off is not.
   const cheap = await giveVoucher('DISCOUNT', 'discount-10', 1000);
