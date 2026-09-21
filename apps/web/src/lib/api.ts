@@ -167,7 +167,10 @@ export async function downloadFile(path: string, filename: string): Promise<void
   link.href = url;
   link.download = filename;
   link.click();
-  // Revoked once the click has been dispatched; leaving it costs the page the
-  // whole file in memory until a reload.
-  URL.revokeObjectURL(url);
+  // Not revoked in the same task as the click. Dispatching the click only
+  // starts the download; a browser that has not yet begun reading the blob
+  // finds it already gone and saves nothing — an export that silently fails on
+  // some browsers and not others. A turn of the event loop is enough, and the
+  // file is still released rather than held until a reload.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }
