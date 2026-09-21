@@ -47,13 +47,25 @@ export class UpgradeService {
   }) {
     const { min, max } = upgradeTargetPriceRange(params.stakeValue);
 
-    // The effective price is priceOverride ?? marketPrice, which a single
-    // `where` cannot filter on. So cast a wide net by market price and apply
-    // the exact bounds to the resolved price afterwards.
+    // The effective price is priceOverride ?? marketPrice, which no single
+    // comparison can express — but the two cases can be named separately, and
+    // together they are exact rather than a net: an override in range, or no
+    // override and a market price in range. The narrower bound is then applied
+    // to the resolved price below, which only has to catch the rows where an
+    // override sits in range and the row was matched on it.
+    //
+    // Filtering here rather than after the fact matters at catalogue size.
+    // Taking the cheapest few thousand active items and hoping the target band
+    // is among them works for a cheap stake and silently returns nothing for a
+    // valuable one, because its band sits above everything that was fetched.
     const where: Prisma.ItemWhereInput = {
       isActive: true,
       priceUpdatedAt: { not: null },
       marketPrice: { gt: 0 },
+      OR: [
+        { priceOverride: { gte: min, lte: max } },
+        { priceOverride: null, marketPrice: { gte: min, lte: max } },
+      ],
       ...(params.search
         ? { marketHashName: { contains: params.search, mode: 'insensitive' } }
         : {}),
