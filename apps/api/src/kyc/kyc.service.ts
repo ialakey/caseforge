@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { KycDocumentKind, KycStatus } from '@prisma/client';
@@ -114,10 +114,19 @@ export class KycService {
     // does not leave a half-finished application with files beside it.
     const decoded = input.documents.map((doc) => this.decode(doc));
 
+    // Replaced wholesale on a re-submission: the previous rejection is in the
+    // audit log, and keeping its documents would mean holding identity papers
+    // the player has already superseded. The files go with the rows — deleting
+    // only the rows would leave the scans on disk with nothing pointing at
+    // them, which is the same data with none of the means to find it again.
+    const superseded = existing
+      ? await this.prisma.kycDocument.findMany({
+          where: { applicationId: existing.id },
+          select: { storagePath: true },
+        })
+      : [];
+
     const application = await this.prisma.$transaction(async (tx) => {
-      // Replaced wholesale on a re-submission: the previous rejection is in
-      // the audit log, and keeping its documents would mean holding identity
-      // papers the player has already superseded.
       if (existing) {
         await tx.kycDocument.deleteMany({ where: { applicationId: existing.id } });
       }
@@ -145,6 +154,12 @@ export class KycService {
         },
       });
     });
+
+    // After the commit, so a transaction that rolled back has not taken the
+    // files of an application that still exists with it.
+    for (const { storagePath } of superseded) {
+      await this.erase(storagePath);
+    }
 
     for (const doc of decoded) {
       const storagePath = path.posix.join(application.id, `${randomUUID()}${doc.extension}`);
@@ -265,12 +280,10 @@ export class KycService {
     const document = await this.prisma.kycDocument.findUnique({ where: { id: documentId } });
     if (!document) throw notFound(ErrorCode.VALIDATION_FAILED, 'No such document');
 
-    const full = path.resolve(this.root(), document.storagePath);
     // Belt and braces: the stored path is generated, but a resolve that escapes
     // the root is worth refusing rather than trusting an invariant elsewhere.
-    if (!full.startsWith(path.resolve(this.root()))) {
-      throw badRequest(ErrorCode.VALIDATION_FAILED, 'Bad document path');
-    }
+    const full = this.within(document.storagePath);
+    if (full === null) throw badRequest(ErrorCode.VALIDATION_FAILED, 'Bad document path');
 
     return { bytes: await readFile(full), contentType: document.contentType };
   }
@@ -281,11 +294,47 @@ export class KycService {
     return path.resolve(process.cwd(), this.config.KYC_STORAGE_DIR);
   }
 
+  /**
+   * The absolute path of a stored document, or null if it is not under the root.
+   *
+   * `startsWith` on the root alone is not the check it looks like: a root of
+   * `/var/kyc` is also a prefix of `/var/kyc-backup`, so a relative path would
+   * only have to climb one level and come back down under a sibling name.
+   * `path.relative` answers the question that was actually being asked — how
+   * to get from the root to the file — and a path that leaves the root says so
+   * by starting with `..`.
+   */
+  private within(storagePath: string): string | null {
+    const root = this.root();
+    const full = path.resolve(root, storagePath);
+    const relative = path.relative(root, full);
+    if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) return null;
+    return full;
+  }
+
   private async write(storagePath: string, bytes: Buffer): Promise<void> {
-    const full = path.resolve(this.root(), storagePath);
+    const full = this.within(storagePath);
+    if (full === null) throw badRequest(ErrorCode.VALIDATION_FAILED, 'Bad document path');
     await mkdir(path.dirname(full), { recursive: true });
     // 0600: readable by the process that wrote it and nothing else on the box.
     await writeFile(full, bytes, { mode: 0o600 });
+  }
+
+  /**
+   * Removes a stored document.
+   *
+   * A file that has already gone is the outcome being asked for, so a failure
+   * to delete is logged and not thrown: an application the player has just
+   * re-submitted must not be refused because of a leftover from the last one.
+   */
+  private async erase(storagePath: string): Promise<void> {
+    const full = this.within(storagePath);
+    if (full === null) return;
+    try {
+      await rm(full, { force: true });
+    } catch (err) {
+      this.logger.error(`Could not delete superseded document ${storagePath}: ${String(err)}`);
+    }
   }
 
   private decode(doc: { kind: KycDocumentKind; contentType: string; base64: string }): {
