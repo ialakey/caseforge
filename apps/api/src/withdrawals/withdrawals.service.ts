@@ -6,7 +6,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { ErrorCode, type WithdrawalProvider } from '@caseforge/shared';
+import { ErrorCode, parseRedisUrl, type WithdrawalProvider } from '@caseforge/shared';
 import { PrismaService } from '../common/prisma.service';
 import { SettingsService } from '../common/settings.service';
 import { KycService } from '../kyc/kyc.service';
@@ -27,9 +27,11 @@ export class WithdrawalsService implements OnModuleDestroy {
     private readonly settings: SettingsService,
     private readonly kyc: KycService,
   ) {
-    const url = new URL(process.env.REDIS_URL ?? 'redis://localhost:6380');
     this.queue = new Queue(WITHDRAWAL_QUEUE, {
-      connection: { host: url.hostname, port: Number(url.port || 6379) },
+      // The whole URL, not just its host and port: a deployment whose Redis
+      // wants a password or lives in a numbered database would otherwise get a
+      // queue that cannot reach it, or one writing where nothing reads.
+      connection: parseRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:6380'),
       defaultJobOptions: {
         attempts: MAX_ATTEMPTS,
         backoff: { type: 'exponential', delay: 5000 },

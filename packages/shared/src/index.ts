@@ -20,5 +20,6 @@ export * from './referral.ts';
 export * from './promo.ts';
 export * from './settings.ts';
 export * from './money.ts';
+export * from './redis-url.ts';
 export * from './types.ts';
 export * from './schemas.ts';

@@ -2,7 +2,7 @@ import path from 'node:path';
 import { config as dotenvConfig } from 'dotenv';
 import { PrismaClient } from '@prisma/client';
 import { Worker } from 'bullmq';
-import { MARKET_API_URL } from '@caseforge/shared';
+import { MARKET_API_URL, parseRedisUrl, type RedisConnectionOptions } from '@caseforge/shared';
 import { BotPool } from './bot-pool.ts';
 import { MarketPool } from './market-pool.ts';
 import { WithdrawalProcessor } from './withdrawal-processor.ts';
@@ -16,9 +16,14 @@ const WITHDRAWAL_QUEUE = 'withdrawals';
 
 const prisma = new PrismaClient();
 
-function redisConnection(): { host: string; port: number } {
-  const url = new URL(process.env.REDIS_URL ?? 'redis://localhost:6380');
-  return { host: url.hostname, port: Number(url.port || 6379) };
+/**
+ * The whole URL, not just its host and port. A worker that dropped the
+ * password would connect to nothing, and one that dropped the database number
+ * would sit listening to a queue the API never writes to — both of which look
+ * like withdrawals that are simply never processed.
+ */
+function redisConnection(): RedisConnectionOptions {
+  return parseRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:6380');
 }
 
 /**
